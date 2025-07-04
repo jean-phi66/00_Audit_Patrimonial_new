@@ -130,6 +130,41 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        # --- Métriques de synthèse post-graphique ---
+        if capital_rembourse_annuel > 0:
+            st.markdown("---")
+            st.subheader("Indicateurs clés de l'investissement")
+            
+            m1, m2, m3 = st.columns(3)
+
+            m1.metric(
+                label="Cash-flow Annuel",
+                value=f"{cash_flow_annuel:,.2f} €",
+                help="Trésorerie nette générée par le bien sur une année."
+            )
+            
+            m2.metric(
+                label="Capital Remboursé Annuel",
+                value=f"{capital_rembourse_annuel:,.2f} €",
+                help="Part du crédit remboursée qui augmente votre patrimoine net."
+            )
+
+            # Calcul de l'effet de levier
+            if cash_flow_annuel >= 0:
+                leverage_display = "∞ (Autofinancé)"
+                help_text = "Le bien s'autofinance (cash-flow positif ou nul), l'effet de levier est donc maximal."
+            else:
+                effort_epargne_annuel = -cash_flow_annuel
+                leverage_value = capital_rembourse_annuel / effort_epargne_annuel
+                leverage_display = f"{leverage_value:.2f}"
+                help_text = f"Pour chaque euro d'effort d'épargne que vous investissez, vous créez {leverage_value:.2f} € de patrimoine (capital remboursé)."
+
+            m3.metric(
+                label="Effet de levier du cash-flow",
+                value=leverage_display,
+                help=help_text
+            )
+
 def main():
     """Fonction principale pour exécuter la page Focus Immobilier."""
     st.title("🔎 Focus Immobilier")
