@@ -28,10 +28,12 @@ def run_data_migrations():
     for passif in st.session_state.passifs:
         if 'valeur' in passif and 'montant_initial' not in passif:
             passif['montant_initial'] = passif.pop('valeur')
+        if 'duree_annees' in passif: # Migration de années vers mois
+            passif['duree_mois'] = passif.pop('duree_annees') * 12
         if 'taux_annuel' not in passif:
             passif['taux_annuel'] = 1.5
-        if 'duree_annees' not in passif:
-            passif['duree_annees'] = 20
+        if 'duree_mois' not in passif:
+            passif['duree_mois'] = 240
         if 'date_debut' not in passif:
             passif['date_debut'] = date(2020, 1, 1)
 
@@ -78,6 +80,24 @@ def display_assets_ui():
                         min_value=0.0, step=50.0, format="%.2f",
                         key=f"actif_taxe_{i}"
                     )
+                    
+                    st.markdown("---")
+                    st.write("**Dispositif Fiscal**")
+                    actif['dispositif_fiscal'] = st.selectbox(
+                        "Dispositif applicable",
+                        options=["Aucun", "Pinel"],
+                        index=1 if actif.get('dispositif_fiscal') == 'Pinel' else 0,
+                        key=f"actif_dispositif_{i}"
+                    )
+
+                    if actif.get('dispositif_fiscal') == 'Pinel':
+                        actif['duree_dispositif'] = st.selectbox(
+                            "Durée d'engagement Pinel", options=[6, 9, 12],
+                            index=[6, 9, 12].index(actif.get('duree_dispositif', 9)),
+                            key=f"pinel_duree_{i}"
+                        )
+                        actif['annee_debut_dispositif'] = st.number_input("Année de début", min_value=2014, max_value=date.today().year, value=actif.get('annee_debut_dispositif', date.today().year - 1), key=f"pinel_annee_{i}")
+
             with button_col:
                 st.write("") # Espaceur
                 st.write("") # Espaceur
@@ -114,7 +134,7 @@ def display_liabilities_ui():
             p_c1, p_c2, p_c3 = st.columns(3)
             passif['montant_initial'] = p_c1.number_input("Montant initial (€)", value=passif.get('montant_initial', 0.0), min_value=0.0, step=1000.0, format="%.2f", key=f"passif_montant_{i}")
             passif['taux_annuel'] = p_c2.number_input("Taux annuel (%)", value=passif.get('taux_annuel', 1.5), min_value=0.0, max_value=100.0, step=0.1, format="%.2f", key=f"passif_taux_{i}")
-            passif['duree_annees'] = p_c3.number_input("Durée (années)", value=passif.get('duree_annees', 20), min_value=0, step=1, key=f"passif_duree_{i}")
+            passif['duree_mois'] = p_c3.number_input("Durée (mois)", value=passif.get('duree_mois', 240), min_value=0, step=12, key=f"passif_duree_{i}")
             
             passif['date_debut'] = st.date_input("Date de début du prêt", value=passif.get('date_debut', date.today()), min_value=date(1980, 1, 1), max_value=date.today(), key=f"passif_date_{i}")
             
@@ -124,8 +144,8 @@ def display_liabilities_ui():
             current_index = asset_options.index(current_assoc_id) if current_assoc_id in asset_options else 0
             passif['actif_associe_id'] = st.selectbox("Actif associé", options=asset_options, index=current_index, format_func=format_asset_choice, key=f"passif_assoc_{i}")
 
-            mensualite = calculate_monthly_payment(passif['montant_initial'], passif['taux_annuel'], passif['duree_annees'])
-            crd = calculate_crd(passif['montant_initial'], passif['taux_annuel'], passif['duree_annees'], passif['date_debut'])
+            mensualite = calculate_monthly_payment(passif['montant_initial'], passif['taux_annuel'], passif['duree_mois'])
+            crd = calculate_crd(passif['montant_initial'], passif['taux_annuel'], passif['duree_mois'], passif['date_debut'])
             passif['crd_calcule'] = crd
             st.markdown("---")
             m1, m2 = st.columns(2)

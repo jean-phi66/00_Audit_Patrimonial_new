@@ -73,8 +73,9 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
         taxe_fonciere = asset.get('taxe_fonciere', 0)
         loyers_nets_de_charges = loyers_annuels - charges_annuelles - taxe_fonciere
         revenus_fonciers_nets = loyers_nets_de_charges - interets_annuels
+        reduction_pinel = tax_info.get('reduction_pinel', 0)
         # Nouveau total intermédiaire qui représente le résultat avant le remboursement du capital
-        resultat_avant_remboursement_capital = revenus_fonciers_nets - tax_info['ir'] - tax_info['ps']
+        resultat_avant_remboursement_capital = revenus_fonciers_nets - tax_info['ir'] - tax_info['ps'] + reduction_pinel
         cash_flow_annuel = savings_effort * 12
 
         fig = go.Figure(go.Waterfall(
@@ -83,7 +84,7 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
             measure = [
                 "absolute", "relative", "relative", "total", # -> Loyers Nets de Charges
                 "relative", "total",                         # -> Revenus Fonciers Nets
-                "relative", "relative", "total",             # -> Résultat Net (avant capital)
+                "relative", "relative", "relative", "total", # -> Résultat Net (avant capital)
                 "relative", "total"                          # -> Cash-flow Net Annuel
             ],
             x = [
@@ -91,7 +92,8 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
                 "Loyers Nets de Charges",
                 "Intérêts d'emprunt",
                 "Revenus Fonciers Nets",
-                "Impôt (IR)", "Prélèv. Sociaux", 
+                "Impôt (IR)", "Prélèv. Sociaux",
+                "Réduction d'impôt (Pinel)",
                 "Résultat Net (avant capital)",
                 "Capital Remboursé",
                 "Cash-flow Net Annuel"
@@ -103,6 +105,7 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
                 f"{-interets_annuels:,.0f} €",
                 f"{revenus_fonciers_nets:,.0f}",
                 f"{-tax_info['ir']:,.0f} €", f"{-tax_info['ps']:,.0f} €",
+                f"+{reduction_pinel:,.0f} €" if reduction_pinel > 0 else "0 €",
                 f"{resultat_avant_remboursement_capital:,.0f}",
                 f"{-capital_rembourse_annuel:,.0f} €",
                 f"{cash_flow_annuel:,.0f}"
@@ -112,7 +115,7 @@ def display_property_analysis(asset, passifs, tmi, social_tax):
                 None, # Total: Loyers Nets de Charges
                 -interets_annuels,
                 None, # Total: Revenus Fonciers Nets
-                -tax_info['ir'], -tax_info['ps'],
+                -tax_info['ir'], -tax_info['ps'], reduction_pinel,
                 None, # Total: Résultat Net (avant capital)
                 -capital_rembourse_annuel,
                 None # Total final

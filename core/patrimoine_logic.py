@@ -5,13 +5,13 @@ import streamlit as st
 
 # --- Fonctions de calcul de prêt ---
 
-def calculate_monthly_payment(principal, annual_rate_pct, duration_years):
+def calculate_monthly_payment(principal, annual_rate_pct, duration_months):
     """Calcule la mensualité d'un prêt."""
-    if duration_years == 0 or annual_rate_pct is None or principal == 0:
+    if duration_months == 0 or annual_rate_pct is None or principal == 0:
         return 0.0
     
     monthly_rate = (annual_rate_pct / 100) / 12
-    total_months = duration_years * 12
+    total_months = duration_months
 
     if monthly_rate == 0:
         return principal / total_months if total_months > 0 else 0
@@ -19,9 +19,9 @@ def calculate_monthly_payment(principal, annual_rate_pct, duration_years):
     payment = principal * (monthly_rate * (1 + monthly_rate)**total_months) / ((1 + monthly_rate)**total_months - 1)
     return payment
 
-def calculate_crd(principal, annual_rate_pct, duration_years, start_date, on_date=None):
+def calculate_crd(principal, annual_rate_pct, duration_months, start_date, on_date=None):
     """Calcule le Capital Restant Dû (CRD) à une date donnée."""
-    if not all([principal > 0, annual_rate_pct is not None, duration_years > 0, start_date]):
+    if not all([principal > 0, annual_rate_pct is not None, duration_months > 0, start_date]):
         return principal
 
     if on_date is None:
@@ -32,12 +32,12 @@ def calculate_crd(principal, annual_rate_pct, duration_years, start_date, on_dat
 
     # On ne compte que les mois pleins écoulés
     months_passed = (on_date.year - start_date.year) * 12 + (on_date.month - start_date.month)
-    total_months = duration_years * 12
+    total_months = duration_months
     
     if months_passed >= total_months:
         return 0.0
 
-    monthly_payment = calculate_monthly_payment(principal, annual_rate_pct, duration_years)
+    monthly_payment = calculate_monthly_payment(principal, annual_rate_pct, duration_months)
     monthly_rate = (annual_rate_pct / 100) / 12
     remaining_months = total_months - months_passed
     
@@ -53,7 +53,7 @@ def calculate_loan_annual_breakdown(loan, year=None):
 
     Args:
         loan (dict): Dictionnaire contenant les informations du prêt.
-                     Doit contenir 'montant_initial', 'taux_annuel', 'duree_annees', 'date_debut'.
+                     Doit contenir 'montant_initial', 'taux_annuel', 'duree_mois', 'date_debut'.
         year (int, optional): L'année pour laquelle faire le calcul. 
                               Par défaut, l'année actuelle.
 
@@ -69,10 +69,10 @@ def calculate_loan_annual_breakdown(loan, year=None):
     # Extraire les détails du prêt
     principal = loan.get('montant_initial', 0)
     annual_rate_pct = loan.get('taux_annuel')
-    duration_years = loan.get('duree_annees', 0)
+    duration_months = loan.get('duree_mois', 0)
     start_date = loan.get('date_debut')
 
-    if not all([principal > 0, annual_rate_pct is not None, duration_years > 0, start_date]):
+    if not all([principal > 0, annual_rate_pct is not None, duration_months > 0, start_date]):
         return {'capital': 0, 'interest': 0, 'total_paid': 0}
 
     # --- 1. Calcul du capital remboursé (méthode la plus fiable) ---
@@ -80,13 +80,13 @@ def calculate_loan_annual_breakdown(loan, year=None):
     date_debut_annee = date(year - 1, 12, 31)
     date_fin_annee = date(year, 12, 31)
 
-    crd_debut_annee = calculate_crd(principal, annual_rate_pct, duration_years, start_date, on_date=date_debut_annee)
-    crd_fin_annee = calculate_crd(principal, annual_rate_pct, duration_years, start_date, on_date=date_fin_annee)
+    crd_debut_annee = calculate_crd(principal, annual_rate_pct, duration_months, start_date, on_date=date_debut_annee)
+    crd_fin_annee = calculate_crd(principal, annual_rate_pct, duration_months, start_date, on_date=date_fin_annee)
     capital_rembourse = crd_debut_annee - crd_fin_annee
 
     # --- 2. Calcul du total payé (nombre de mensualités) ---
-    mensualite = calculate_monthly_payment(principal, annual_rate_pct, duration_years)
-    total_duration_months = duration_years * 12
+    mensualite = calculate_monthly_payment(principal, annual_rate_pct, duration_months)
+    total_duration_months = duration_months
     
     def get_months_passed(current_date):
         if start_date > current_date: return 0
@@ -150,7 +150,7 @@ def add_item(category):
             'libelle': '', 
             'montant_initial': 100000.0,
             'taux_annuel': 1.5,
-            'duree_annees': 20,
+            'duree_mois': 240,
             'date_debut': date.today(),
             'actif_associe_id': None
         })
@@ -203,40 +203,45 @@ def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct):
     charges_annuelles = asset.get('charges', 0) * 12
     taxe_fonciere = asset.get('taxe_fonciere', 0)
     
-    # Calcul des intérêts d'emprunt (simplifié)
-    interets_emprunt = 0
-    if loan:
-        mensualite = calculate_monthly_payment(loan['montant_initial'], loan['taux_annuel'], loan['duree_annees'])
-        current_year = date.today().year
-        # On calcule pour l'année N-1 car les revenus fonciers se déclarent sur l'année passée
-        previous_year = current_year - 1
-        start_of_year = date(previous_year, 1, 1)
-        end_of_year = date(previous_year, 12, 31)
-
-        # On s'assure de ne pas calculer avant le début du prêt
-        calc_date_start = max(start_of_year, loan['date_debut'])
-        calc_date_end = max(end_of_year, loan['date_debut'])
-
-        crd_debut_annee = calculate_crd(loan['montant_initial'], loan['taux_annuel'], loan['duree_annees'], loan['date_debut'], on_date=calc_date_start)
-        crd_fin_annee = calculate_crd(loan['montant_initial'], loan['taux_annuel'], loan['duree_annees'], loan['date_debut'], on_date=calc_date_end)
-        
-        capital_rembourse_annee = crd_debut_annee - crd_fin_annee
-        
-        # On ne compte les mensualités que si le prêt a effectivement couru sur la période
-        if loan['date_debut'] < end_of_year:
-            # Calcul simple des paiements sur l'année
-            interets_emprunt = max(0, (mensualite * 12) - capital_rembourse_annee)
+    # Utilisation de la fonction précise pour les intérêts
+    loan_breakdown = calculate_loan_annual_breakdown(loan)
+    interets_emprunt = loan_breakdown['interest']
 
     charges_deductibles = charges_annuelles + taxe_fonciere + interets_emprunt
     revenu_foncier_imposable = max(0, loyers_annuels - charges_deductibles)
     
     impot_sur_revenu = revenu_foncier_imposable * (tmi_pct / 100)
     prelevements_sociaux = revenu_foncier_imposable * (social_tax_pct / 100)
+
+    # --- Calcul de la réduction d'impôt (Pinel) ---
+    reduction_pinel = 0
+    if asset.get('dispositif_fiscal') == 'Pinel':
+        annee_debut = asset.get('annee_debut_dispositif')
+        duree = asset.get('duree_dispositif')
+        annee_actuelle = date.today().year
+
+        if annee_debut and duree and (annee_debut <= annee_actuelle < annee_debut + duree):
+            # Le calcul de la réduction se base sur la valeur d'achat, plafonnée à 300 000 €
+            base_calcul = min(asset.get('valeur', 0), 300000)
+            
+            # Taux annuel : 2% les 9 premières années, 1% de la 10e à la 12e
+            annees_ecoulees = annee_actuelle - annee_debut
+            if 0 <= annees_ecoulees < 9:
+                taux_reduction_annuel = 0.02
+            elif 9 <= annees_ecoulees < 12 and duree == 12:
+                taux_reduction_annuel = 0.01
+            else:
+                taux_reduction_annuel = 0 # Ne devrait pas arriver dans la condition de l'année
+            
+            reduction_pinel = base_calcul * taux_reduction_annuel
+
+    total_impot = impot_sur_revenu + prelevements_sociaux - reduction_pinel
     
     return {
-        'total': impot_sur_revenu + prelevements_sociaux,
+        'total': total_impot,
         'ir': impot_sur_revenu,
-        'ps': prelevements_sociaux
+        'ps': prelevements_sociaux,
+        'reduction_pinel': reduction_pinel
     }
 
 def calculate_net_yield_tax(asset, total_annual_tax):
@@ -255,7 +260,7 @@ def calculate_savings_effort(asset, loan, total_annual_tax):
     loyers_mensuels = asset.get('loyers_mensuels', 0)
     charges_mensuelles = asset.get('charges', 0)
     taxe_fonciere_mensuelle = asset.get('taxe_fonciere', 0) / 12
-    mensualite_pret = calculate_monthly_payment(loan['montant_initial'], loan['taux_annuel'], loan['duree_annees']) if loan else 0
+    mensualite_pret = calculate_monthly_payment(loan['montant_initial'], loan['taux_annuel'], loan['duree_mois']) if loan else 0
     
     cash_flow = loyers_mensuels - charges_mensuelles - taxe_fonciere_mensuelle - mensualite_pret - (total_annual_tax / 12)
     return cash_flow
