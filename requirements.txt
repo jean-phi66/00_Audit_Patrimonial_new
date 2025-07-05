@@ -1,5 +1,5 @@
 openfisca_core==43.3.8
 openfisca_france==172.0.5
 pandas==2.3.0
-plotly==5.9.0
+plotly==6.2.0
 streamlit==1.46.1
