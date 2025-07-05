@@ -9,7 +9,7 @@ except ImportError:
     OPENFISCA_READY = False
 
 @st.cache_data
-def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, est_parent_isole=False):
+def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, revenu_foncier_net=0, est_parent_isole=False):
     """
     Calcule l'impôt sur le revenu pour une année donnée en utilisant OpenFisca-France.
     Cette fonction est adaptée à la structure de données de l'application (st.session_state).
@@ -22,6 +22,7 @@ def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, est_paren
                         Chaque dict doit contenir 'prenom' et 'date_naissance'.
         revenus_annuels (dict): Dictionnaire des revenus pour l'année, avec les prénoms comme clés.
                                 Ex: {'Jean': 50000, 'Marie': 45000}
+        revenu_foncier_net (float): Montant total du revenu foncier net imposable pour l'année.
         est_parent_isole (bool): True si le foyer est monoparental (pour la case T).
 
     Returns:
@@ -56,6 +57,7 @@ def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, est_paren
             'salaire_imposable': {str(annee): revenu_parent},
             'date_naissance': {'ETERNITY': date_naissance_formatee}
         }
+
         declarants.append(prenom)
 
     # --- Traitement des enfants ---
@@ -81,6 +83,11 @@ def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, est_paren
         'declarants': declarants,
         'personnes_a_charge': personnes_a_charge
     }}
+
+    # Les revenus fonciers sont rattachés au foyer fiscal, et non à un individu.
+    # On fournit directement le revenu net calculé à la variable 'revenu_categoriel_foncier'.
+    if revenu_foncier_net > 0:
+        foyer_fiscal['foyerfiscal1']['revenu_categoriel_foncier'] = {str(annee): revenu_foncier_net}
 
     if est_parent_isole:
         foyer_fiscal['foyerfiscal1']['caseT'] = {str(annee): True}

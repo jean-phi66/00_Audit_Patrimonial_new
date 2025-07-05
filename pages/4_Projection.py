@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.figure_factory as ff
 from datetime import date, timedelta
 import plotly.express as px
-from core.patrimoine_logic import calculate_loan_annual_breakdown
+from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loan
 
 try:
     from utils.openfisca_utils import calculer_impot_openfisca
@@ -128,6 +128,7 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         }
 
     passifs = st.session_state.get('passifs', [])
+    actifs_productifs = [a for a in st.session_state.get('actifs', []) if a.get('type') == 'Immobilier productif']
 
     for i in range(projection_duration + 1):
         annee = today.year + i
@@ -224,25 +225,68 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         year_data['Autres revenus'] = sum(r.get('montant', 0) * 12 for r in all_revenus if r.get('type') == 'Autre')
 
         # --- Calcul de l'impôt ---
+        # 1. Calcul des revenus fonciers et de la réduction Pinel pour l'année
+        total_loyers_bruts_annee = 0
+        total_charges_deductibles_annee = 0
+        total_reduction_pinel_annee = 0
+
+        for asset in actifs_productifs:
+            # Calcul des revenus et charges
+            loyers_annuels = asset.get('loyers_mensuels', 0) * 12
+            charges_annuelles = asset.get('charges', 0) * 12
+            taxe_fonciere = asset.get('taxe_fonciere', 0)
+            
+            loan = find_associated_loan(asset.get('id'), passifs)
+            interets_emprunt = calculate_loan_annual_breakdown(loan, year=annee).get('interest', 0)
+
+            charges_deductibles_asset = charges_annuelles + taxe_fonciere + interets_emprunt
+            total_loyers_bruts_annee += loyers_annuels
+            total_charges_deductibles_annee += charges_deductibles_asset
+
+            # Calcul de la réduction d'impôt Pinel pour l'année
+            if asset.get('dispositif_fiscal') == 'Pinel':
+                annee_debut = asset.get('annee_debut_dispositif')
+                duree = asset.get('duree_dispositif')
+                if annee_debut and duree and (annee_debut <= annee < annee_debut + duree):
+                    base_calcul = min(asset.get('valeur', 0), 300000)
+                    annees_ecoulees = annee - annee_debut
+                    taux_reduction_annuel = 0.02 if 0 <= annees_ecoulees < 9 else (0.01 if 9 <= annees_ecoulees < 12 and duree == 12 else 0)
+                    total_reduction_pinel_annee += base_calcul * taux_reduction_annuel
+
+        # Ajout du revenu foncier net calculé pour vérification dans le tableau
+        revenu_foncier_net_calcule = max(0, total_loyers_bruts_annee - total_charges_deductibles_annee)
+        year_data['Revenu Foncier Net'] = revenu_foncier_net_calcule
+
+        # Calcul des prélèvements sociaux sur les revenus fonciers
+        prelevements_sociaux = revenu_foncier_net_calcule * 0.172
+        year_data['Prélèvements Sociaux'] = prelevements_sociaux
+
+        # 2. Appel à OpenFisca avec tous les revenus
         if OPENFISCA_UTILITY_AVAILABLE:
             est_parent_isole = len(parents) == 1
-            impot = calculer_impot_openfisca(
+            impot_brut = calculer_impot_openfisca(
                 annee=annee,
                 parents=parents,
                 enfants=enfants_a_charge_annee,
                 revenus_annuels=revenus_annuels_parents,
+                revenu_foncier_net=revenu_foncier_net_calcule,
                 est_parent_isole=est_parent_isole
             )
+            # On applique la réduction d'impôt après le calcul
+            impot = max(0, impot_brut - total_reduction_pinel_annee)
         else:
             # Fallback si OpenFisca n'est pas disponible
-            impot = total_revenus_foyer * 0.15
+            # On utilise le revenu foncier net calculé manuellement
+            total_revenus_imposables = total_revenus_foyer + revenu_foncier_net_calcule
+            impot_brut = total_revenus_imposables * 0.15 # Taux forfaitaire simple
+            impot = max(0, impot_brut - total_reduction_pinel_annee)
 
         year_data['Impôt sur le revenu'] = impot  # Peut être négatif avec certaines réductions d'impôts
 
         # --- Finalisation des calculs financiers ---
-        # Le "Reste à vivre" est maintenant calculé après déduction de toutes les charges ET de l'impôt.
+        # Le "Reste à vivre" est maintenant calculé après déduction de toutes les charges, de l'impôt et des prélèvements sociaux.
         year_data['Revenus du foyer'] = total_revenus_foyer + year_data['Loyers perçus'] + year_data['Autres revenus']
-        year_data['Reste à vivre'] = year_data['Revenus du foyer'] - total_depenses - impot
+        year_data['Reste à vivre'] = year_data['Revenus du foyer'] - total_depenses - impot - prelevements_sociaux
 
         projection_data.append(year_data)
         
@@ -255,9 +299,9 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
     for enfant in enfants:
         column_order.extend([f'Âge {enfant["prenom"]}', f'Statut {enfant["prenom"]}'])
     column_order.extend([
-        'Revenus bruts du foyer', 'Loyers perçus', 'Autres revenus', 'Revenus du foyer', 
+        'Revenus bruts du foyer', 'Loyers perçus', 'Revenu Foncier Net', 'Autres revenus', 'Revenus du foyer', 
         'Mensualités Prêts', 'Charges Immobilières', 'Taxes Foncières', 'Autres Dépenses', 'Coût des études',
-        'Impôt sur le revenu', 'Reste à vivre'
+        'Impôt sur le revenu', 'Prélèvements Sociaux', 'Reste à vivre'
     ])
 
     # S'assurer que toutes les colonnes existent pour éviter les erreurs
@@ -420,6 +464,7 @@ def display_financial_projection(df_projection):
         or 'Taxes' in col
         or 'Coût' in col
         or 'Loyers' in col
+        or 'Prélèvements' in col
     ]
     format_dict = {col: '{:,.0f} €' for col in money_cols}
     st.dataframe(df_display.style.format(format_dict), use_container_width=True)
@@ -429,6 +474,7 @@ def display_financial_projection(df_projection):
     # Définir les colonnes à empiler, dans l'ordre souhaité
     cols_to_stack = [
         'Reste à vivre',
+        'Prélèvements Sociaux',
         'Impôt sur le revenu',
         'Coût des études',
         'Autres Dépenses',

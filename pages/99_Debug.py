@@ -52,6 +52,9 @@ else:
             if prenom:
                 test_revenus[prenom] = st.number_input(f"Revenu de {prenom}", min_value=0, value=50000, step=1000, key=f"debug_rev_{prenom}")
 
+        st.subheader("Revenus fonciers pour le test")
+        test_revenu_foncier_net = st.number_input("Revenu foncier net imposable", min_value=0, value=9000, step=500)
+
         test_parent_isole = st.checkbox("Le foyer est-il monoparental (coche la case T) ?")
 
         submitted = st.form_submit_button("Lancer le calcul d'impôt de test")
@@ -66,6 +69,7 @@ else:
                 parents=parents_data,
                 enfants=enfants_data,
                 revenus_annuels=test_revenus,
+                revenu_foncier_net=test_revenu_foncier_net,
                 est_parent_isole=test_parent_isole
             )
 
@@ -77,5 +81,6 @@ else:
                     "parents": parents_data,
                     "enfants": enfants_data,
                     "revenus_annuels": test_revenus,
+                    "revenu_foncier_net": test_revenu_foncier_net,
                     "est_parent_isole": test_parent_isole
                 })
