@@ -27,6 +27,12 @@ if 'actifs' not in st.session_state:
 if 'passifs' not in st.session_state:
     st.session_state.passifs = []
 
+# --- Initialisation pour les flux ---
+if 'revenus' not in st.session_state:
+    st.session_state.revenus = []
+if 'depenses' not in st.session_state:
+    st.session_state.depenses = []
+
 
 # Page d'accueil
 st.title("Outil d'Audit Patrimonial 💰")

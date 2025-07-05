@@ -27,7 +27,9 @@ def get_data_to_save():
         'enfants': st.session_state.get('enfants', []),
         'actifs': st.session_state.get('actifs', []),
         'passifs': st.session_state.get('passifs', []),
-        'projection_settings': st.session_state.get('projection_settings', {})
+        'projection_settings': st.session_state.get('projection_settings', {}),
+        'revenus': st.session_state.get('revenus', []),
+        'depenses': st.session_state.get('depenses', [])
     }
 
 def load_data_into_session(data):
@@ -37,6 +39,8 @@ def load_data_into_session(data):
     st.session_state.actifs = data.get('actifs', [])
     st.session_state.passifs = data.get('passifs', [])
     st.session_state.projection_settings = data.get('projection_settings', {})
+    st.session_state.revenus = data.get('revenus', [])
+    st.session_state.depenses = data.get('depenses', [])
 
 
 def main():

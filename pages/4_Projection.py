@@ -123,7 +123,7 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         prenom = p['prenom']
         income_settings[prenom] = {
             'revenu_actuel': settings[prenom].get('revenu_actuel', 0),
-            'taux_remplacement_retraite': settings[prenom].get('taux_remplacement_retraite', 0.7)
+            'pension_annuelle': settings[prenom].get('pension_annuelle', 25000)
         }
 
     for i in range(projection_duration + 1):
@@ -145,7 +145,7 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             if age < age_retraite:
                 revenu = income_settings[prenom]['revenu_actuel']
             else:
-                revenu = income_settings[prenom]['revenu_actuel'] * income_settings[prenom]['taux_remplacement_retraite']
+                revenu = income_settings[prenom]['pension_annuelle']
             
             revenus_annuels_parents[prenom] = revenu
             year_data[f'Revenu {prenom}'] = revenu
@@ -219,12 +219,28 @@ def display_settings_ui(parents, enfants):
             for parent in parents:
                 prenom = parent.get('prenom')
                 if prenom:
+                    # 1. Initialisation des paramètres de projection s'ils n'existent pas
                     if prenom not in st.session_state.projection_settings:
-                        st.session_state.projection_settings[prenom] = {'retraite': 64, 'revenu_actuel': 50000, 'taux_remplacement_retraite': 0.7}
+                        st.session_state.projection_settings[prenom] = {
+                            'retraite': 64, 
+                            'revenu_actuel': 0,  # Sera écrasé par la synchro
+                            'pension_annuelle': 25000
+                        }
+                    
+                    # 2. Synchronisation systématique du revenu depuis la page Flux
+                    salaire_mensuel = 0
+                    for revenu in st.session_state.get('revenus', []):
+                        if revenu.get('type') == 'Salaire' and revenu.get('libelle') == f"Salaire {prenom}":
+                            salaire_mensuel = revenu.get('montant', 0)
+                            break
+                    revenu_annuel_depuis_flux = salaire_mensuel * 12
+                    st.session_state.projection_settings[prenom]['revenu_actuel'] = revenu_annuel_depuis_flux
+
+                    # 3. Affichage des paramètres
                     age_actuel = calculate_age(parent.get('date_naissance'))
                     st.session_state.projection_settings[prenom]['retraite'] = st.number_input(f"Âge de départ à la retraite de {prenom}", min_value=age_actuel, max_value=75, value=st.session_state.projection_settings[prenom]['retraite'], key=f"retraite_{prenom}")
-                    st.session_state.projection_settings[prenom]['revenu_actuel'] = st.number_input(f"Revenu annuel brut de {prenom}", 0, 500000, st.session_state.projection_settings[prenom].get('revenu_actuel', 50000), step=1000, key=f"revenu_{prenom}")
-                    st.session_state.projection_settings[prenom]['taux_remplacement_retraite'] = st.slider(f"Taux de remplacement retraite de {prenom}", 0.0, 1.0, st.session_state.projection_settings[prenom].get('taux_remplacement_retraite', 0.7), 0.05, key=f"tx_rempl_{prenom}")
+                    st.number_input(f"Revenu annuel brut de {prenom} (activité)", value=st.session_state.projection_settings[prenom]['revenu_actuel'], disabled=True, key=f"revenu_{prenom}", help="Cette valeur est synchronisée depuis la page 'Flux' et n'est pas modifiable ici.")
+                    st.session_state.projection_settings[prenom]['pension_annuelle'] = st.number_input(f"Pension de retraite annuelle de {prenom}", 0, 200000, st.session_state.projection_settings[prenom].get('pension_annuelle', 25000), step=500, key=f"pension_{prenom}")
 
         with col2:
             st.subheader("👶 Enfants")
