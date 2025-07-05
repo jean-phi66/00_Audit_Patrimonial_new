@@ -204,17 +204,18 @@ def display_summary():
     if capacite_epargne < 0:
         st.warning(f"Attention : Vos dépenses ({total_depenses:,.2f} €) dépassent vos revenus ({total_revenus:,.2f} €). Vous avez un déficit mensuel de {-capacite_epargne:,.2f} €.")
 
-    if st.session_state.depenses:
-        st.markdown("---")
-        st.subheader("Répartition des Dépenses (Camembert)")
-        df_depenses = pd.DataFrame(st.session_state.depenses)
-        if not df_depenses.empty and df_depenses['montant'].sum() > 0:
-            fig = px.pie(df_depenses, values='montant', names='categorie', title='Répartition des dépenses par catégorie', hole=.3)
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
+    if(False):
+        if st.session_state.depenses:
+            st.markdown("---")
+            st.subheader("Répartition des Dépenses (Camembert)")
+            df_depenses = pd.DataFrame(st.session_state.depenses)
+            if not df_depenses.empty and df_depenses['montant'].sum() > 0:
+                fig = px.pie(df_depenses, values='montant', names='categorie', title='Répartition des dépenses par catégorie', hole=.3)
+                fig.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig, use_container_width=True)
 
     # --- Ajout des Treemaps ---
-    st.markdown("---")
+    #st.markdown("---")
     st.subheader("Répartition des Revenus (Dépenses + Reste à vivre)")
 
     if total_revenus > 0:

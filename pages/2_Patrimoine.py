@@ -165,13 +165,29 @@ def display_summary_and_charts():
     metric_col2.metric("Total Passifs", f"{total_passifs:,.2f} €")
     metric_col3.metric("Patrimoine Net", f"{patrimoine_net:,.2f} €")
 
-    st.markdown("---")
-    st.header("Visualisation du Patrimoine")
+    #st.markdown("---")
+    #st.header("Visualisation du Patrimoine")
     df_patrimoine = get_patrimoine_df(st.session_state.actifs, st.session_state.passifs)
 
     if df_patrimoine.empty:
         st.info("Ajoutez des actifs pour visualiser la répartition de votre patrimoine.")
         return
+
+    st.subheader("Tableau Récapitulatif")
+    df_display = df_patrimoine.copy()
+    # S'assurer que les colonnes existent avant de les réordonner pour l'affichage
+    cols_to_display = ['Libellé', 'Type', 'Valeur Brute', 'Passif', 'Valeur Nette']
+    existing_cols = [col for col in cols_to_display if col in df_display.columns]
+    st.dataframe(
+        df_display[existing_cols].style.format({
+            'Valeur Brute': '{:,.2f} €',
+            'Passif': '{:,.2f} €',
+            'Valeur Nette': '{:,.2f} €'
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
@@ -195,6 +211,58 @@ def display_summary_and_charts():
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur nette positive à afficher.")
+
+    st.markdown("---")
+    st.header("Analyse de la Répartition")
+
+    # Définir une palette de couleurs cohérente pour les graphiques
+    color_map = {
+        'Immobilier de jouissance': px.colors.qualitative.Plotly[0],
+        'Immobilier productif': px.colors.qualitative.Plotly[1],
+        'Actifs financiers': px.colors.qualitative.Plotly[2],
+        'Placements financiers': px.colors.qualitative.Plotly[2], # Même couleur pour la cible
+        'Autres actifs': px.colors.qualitative.Plotly[3]
+    }
+    donut_col1, donut_col2 = st.columns(2)
+
+    with donut_col1:
+        st.subheader("Répartition Actuelle (Nette)")
+        df_net_by_type = df_patrimoine[df_patrimoine['Valeur Nette'] > 0].groupby('Type')['Valeur Nette'].sum().reset_index()
+        if not df_net_by_type.empty:
+            fig_donut_actual = px.pie(
+                df_net_by_type,
+                names='Type',
+                values='Valeur Nette',
+                #title="Patrimoine Net par Type d'Actif",
+                hole=0.4,
+                color='Type',
+                color_discrete_map=color_map
+            )
+            fig_donut_actual.update_traces(textposition='inside', textinfo='percent+label')
+            fig_donut_actual.update_layout(showlegend=True, legend_title_text='Type d\'Actif', margin=dict(t=50, l=10, r=10, b=10))
+            st.plotly_chart(fig_donut_actual, use_container_width=True)
+        else:
+            st.info("Aucun actif avec une valeur nette positive à afficher.")
+
+    with donut_col2:
+        st.subheader("Répartition Cible Théorique")
+        ideal_data = {
+            'Catégorie': ['Immobilier de jouissance', 'Immobilier productif', 'Placements financiers'],
+            'Pourcentage': [33.33, 33.33, 33.34]
+        }
+        df_ideal = pd.DataFrame(ideal_data)
+        fig_donut_ideal = px.pie(
+            df_ideal,
+            names='Catégorie',
+            values='Pourcentage',
+            #title="Modèle de Répartition en Tiers",
+            hole=0.4,
+            color='Catégorie',
+            color_discrete_map=color_map
+        )
+        fig_donut_ideal.update_traces(textposition='inside', textinfo='percent+label')
+        fig_donut_ideal.update_layout(showlegend=True, legend_title_text='Catégorie', margin=dict(t=50, l=10, r=10, b=10))
+        st.plotly_chart(fig_donut_ideal, use_container_width=True)
 
 # --- Exécution Principale ---
 

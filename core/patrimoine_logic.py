@@ -131,6 +131,7 @@ def get_patrimoine_df(actifs, passifs):
             'Libellé': a.get('libelle') or 'Actif sans nom',
             'Type': a.get('type', 'Indéfini'),
             'Valeur Brute': valeur_brute,
+            'Passif': dette_associee,
             'Valeur Nette': valeur_nette
         })
 

@@ -439,7 +439,7 @@ def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-def display_financial_projection(df_projection):
+def display_financial_projection(df_projection, parents, settings):
     """Affiche le tableau et le graphique de la projection financière."""
     st.header("📈 Projection Financière Annuelle")
     if not OPENFISCA_UTILITY_AVAILABLE:
@@ -510,6 +510,62 @@ def display_financial_projection(df_projection):
 
     st.plotly_chart(fig_bar, use_container_width=True)
 
+    st.subheader("Graphique du cumul de la fiscalité")
+    st.markdown("Ce graphique montre le cumul de l'impôt sur le revenu et des prélèvements sociaux au fil des ans, hors taxes foncières.")
+
+    # 1. Préparer les données
+    df_fiscalite = df_projection[['Année', 'Impôt sur le revenu', 'Prélèvements Sociaux']].copy()
+    df_fiscalite['Fiscalité Annuelle'] = df_fiscalite['Impôt sur le revenu'] + df_fiscalite['Prélèvements Sociaux']
+    df_fiscalite['Fiscalité Cumulée'] = df_fiscalite['Fiscalité Annuelle'].cumsum()
+
+    # 2. Trouver les points de retraite
+    retirement_points = []
+    for parent in parents:
+        prenom = parent.get('prenom')
+        dob = parent.get('date_naissance')
+        if prenom and dob and prenom in settings:
+            age_retraite = settings[prenom]['retraite']
+            annee_retraite = dob.year + age_retraite
+            
+            # Trouver les données pour cette année
+            retirement_data = df_fiscalite[df_fiscalite['Année'] == annee_retraite]
+            if not retirement_data.empty:
+                point = {
+                    'Année': annee_retraite,
+                    'Fiscalité Cumulée': retirement_data.iloc[0]['Fiscalité Cumulée'],
+                    'Label': f"Retraite {prenom}"
+                }
+                retirement_points.append(point)
+
+    df_retirement_points = pd.DataFrame(retirement_points)
+
+    # 3. Créer le graphique en aire
+    fig_cumul = px.area(
+        df_fiscalite, x='Année', y='Fiscalité Cumulée',
+        title="Évolution du total des impôts et prélèvements sociaux payés",
+        labels={'Fiscalité Cumulée': 'Total de la fiscalité cumulée (€)'},
+        hover_data={'Fiscalité Annuelle': ':,.0f €'}
+    )
+    fig_cumul.update_traces(line=dict(color='indianred'))
+
+    # Ajouter les marqueurs pour les départs en retraite
+    if not df_retirement_points.empty:
+        # Créer les étiquettes de texte qui incluent le montant pour l'affichage sur le graphique
+        text_labels = df_retirement_points.apply(
+            lambda row: f"{row['Label']}<br><b>{row['Fiscalité Cumulée']:,.0f} €</b>",
+            axis=1
+        )
+        fig_cumul.add_scatter(
+            x=df_retirement_points['Année'], y=df_retirement_points['Fiscalité Cumulée'],
+            mode='markers+text', marker=dict(symbol='star', size=12, color='gold', line=dict(width=1, color='black')),
+            text=text_labels, textposition="top center", name='Départs en retraite',
+            hovertemplate="<b>%{customdata[0]}</b><br>Année: %{x}<br>Cumul: %{y:,.0f} €<extra></extra>",
+            customdata=df_retirement_points[['Label']]
+        )
+
+    fig_cumul.update_layout(showlegend=False)
+    st.plotly_chart(fig_cumul, use_container_width=True)
+
 # --- Exécution Principale ---
 
 def main():
@@ -533,7 +589,7 @@ def main():
     display_gantt_chart(gantt_data, duree_projection, parents, enfants)
 
     df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
-    display_financial_projection(df_projection)
+    display_financial_projection(df_projection, parents, settings)
 
 if __name__ == "__main__":
     main()
