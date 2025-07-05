@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.figure_factory as ff
 from datetime import date, timedelta
 import plotly.express as px
+from core.patrimoine_logic import calculate_loan_annual_breakdown
 
 try:
     from utils.openfisca_utils import calculer_impot_openfisca
@@ -126,6 +127,8 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             'pension_annuelle': settings[prenom].get('pension_annuelle', 25000)
         }
 
+    passifs = st.session_state.get('passifs', [])
+
     for i in range(projection_duration + 1):
         annee = today.year + i
         current_date_in_year = date(annee, 1, 1)
@@ -143,10 +146,13 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             age_retraite = settings[prenom]['retraite']
             
             if age < age_retraite:
+                status_parent = "Actif"
                 revenu = income_settings[prenom]['revenu_actuel']
             else:
+                status_parent = "Retraite"
                 revenu = income_settings[prenom]['pension_annuelle']
             
+            year_data[f'Statut {prenom}'] = status_parent
             revenus_annuels_parents[prenom] = revenu
             year_data[f'Revenu {prenom}'] = revenu
 
@@ -156,23 +162,66 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         
         # --- Déterminer les enfants à charge pour l'année en cours ---
         enfants_a_charge_annee = []
+        total_cout_etudes_annee = 0
         for enfant in enfants:
             prenom_enfant = enfant.get('prenom')
             dob_enfant = enfant.get('date_naissance')
             if not prenom_enfant or not dob_enfant:
                 continue
 
-            # Récupérer les paramètres d'études pour l'enfant
+            # 1. Récupérer les paramètres pour l'enfant
             settings_enfant = settings.get(prenom_enfant, {})
             age_debut_etudes = settings_enfant.get('debut_etudes', 18)
             duree_etudes = settings_enfant.get('duree_etudes', 5)
+            cout_etudes_annuel = settings_enfant.get('cout_etudes_annuel', 0)
 
-            annee_fin_etudes = dob_enfant.year + age_debut_etudes + duree_etudes
+            # 2. Calcul de l'âge et du statut de l'enfant pour l'année en cours
+            age_enfant = calculate_age(dob_enfant, current_date_in_year)
+            
+            if age_enfant < age_debut_etudes:
+                status = "Scolarisé"
+            elif age_enfant <= age_debut_etudes + duree_etudes:
+                status = "Études"
+            else:
+                status = "Actif"
+            
+            year_data[f'Âge {prenom_enfant}'] = age_enfant
+            year_data[f'Statut {prenom_enfant}'] = status
 
-            # L'enfant est considéré à charge si l'année de projection est <= à l'année de fin d'études.
-            # OpenFisca gère ensuite les limites d'âge (ex: < 25 ans) sur cette liste pré-filtrée.
-            if annee <= annee_fin_etudes:
+            # 3. Déterminer si l'enfant est à charge et ajouter les coûts associés
+            # L'enfant est rattaché au foyer fiscal s'il n'est pas encore "Actif".
+            # OpenFisca gère ensuite les limites d'âge (ex: < 25 ans) pour le calcul d'impôt.
+            if status != "Actif":
                 enfants_a_charge_annee.append(enfant)
+            
+            if status == "Études":
+                total_cout_etudes_annee += cout_etudes_annuel
+
+        year_data['Coût des études'] = total_cout_etudes_annee
+
+        # --- Flux financiers (revenus et dépenses) ---
+        # 1. Calcul dynamique des mensualités de prêts pour l'année en cours
+        total_paiements_prets_annee = 0
+        for pret in passifs:
+            breakdown = calculate_loan_annual_breakdown(pret, year=annee)
+            total_paiements_prets_annee += breakdown.get('total_paid', 0)
+        year_data['Mensualités Prêts'] = total_paiements_prets_annee
+
+        # 2. Calcul des autres dépenses (qui sont supposées constantes pour l'instant)
+        all_depenses = st.session_state.get('depenses', [])
+        charges_immo = sum(d.get('montant', 0) * 12 for d in all_depenses if d.get('categorie') == 'Logement' and 'source_id' in d)
+        taxes_foncieres = sum(d.get('montant', 0) * 12 for d in all_depenses if d.get('categorie') == 'Impôts et taxes' and 'source_id' in d)
+        autres_depenses = sum(d.get('montant', 0) * 12 for d in all_depenses if 'source_id' not in d)
+        
+        year_data['Charges Immobilières'] = charges_immo
+        year_data['Taxes Foncières'] = taxes_foncieres
+        year_data['Autres Dépenses'] = autres_depenses
+        total_depenses = total_paiements_prets_annee + charges_immo + taxes_foncieres + autres_depenses + total_cout_etudes_annee
+
+        # 3. Calcul des revenus annexes
+        all_revenus = st.session_state.get('revenus', [])
+        year_data['Loyers perçus'] = sum(r.get('montant', 0) * 12 for r in all_revenus if r.get('type') == 'Patrimoine')
+        year_data['Autres revenus'] = sum(r.get('montant', 0) * 12 for r in all_revenus if r.get('type') == 'Autre')
 
         # --- Calcul de l'impôt ---
         if OPENFISCA_UTILITY_AVAILABLE:
@@ -188,17 +237,35 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             # Fallback si OpenFisca n'est pas disponible
             impot = total_revenus_foyer * 0.15
 
-        year_data['Impôt sur le revenu'] = impot
-        year_data['Revenus nets du foyer'] = total_revenus_foyer - impot
-        
+        year_data['Impôt sur le revenu'] = impot  # Peut être négatif avec certaines réductions d'impôts
+
+        # --- Finalisation des calculs financiers ---
+        # Le "Reste à vivre" est maintenant calculé après déduction de toutes les charges ET de l'impôt.
+        year_data['Revenus du foyer'] = total_revenus_foyer + year_data['Loyers perçus'] + year_data['Autres revenus']
+        year_data['Reste à vivre'] = year_data['Revenus du foyer'] - total_depenses - impot
+
         projection_data.append(year_data)
         
     df = pd.DataFrame(projection_data)
-    # S'assurer que les colonnes clés existent même si vides
-    for col in ['Année', 'Revenus bruts du foyer', 'Impôt sur le revenu', 'Revenus nets du foyer']:
+
+    # Réordonner les colonnes pour plus de clarté
+    column_order = ['Année']
+    for parent in parents:
+        column_order.extend([f'Âge {parent["prenom"]}', f'Statut {parent["prenom"]}', f'Revenu {parent["prenom"]}'])
+    for enfant in enfants:
+        column_order.extend([f'Âge {enfant["prenom"]}', f'Statut {enfant["prenom"]}'])
+    column_order.extend([
+        'Revenus bruts du foyer', 'Loyers perçus', 'Autres revenus', 'Revenus du foyer', 
+        'Mensualités Prêts', 'Charges Immobilières', 'Taxes Foncières', 'Autres Dépenses', 'Coût des études',
+        'Impôt sur le revenu', 'Reste à vivre'
+    ])
+
+    # S'assurer que toutes les colonnes existent pour éviter les erreurs
+    for col in column_order:
         if col not in df.columns:
             df[col] = 0
-            
+
+    df = df[column_order]
     return df
 
 # --- Fonctions d'interface utilisateur (UI) ---
@@ -250,9 +317,14 @@ def display_settings_ui(parents, enfants):
                 prenom = enfant.get('prenom')
                 if prenom:
                     if prenom not in st.session_state.projection_settings:
-                        st.session_state.projection_settings[prenom] = {'debut_etudes': 18, 'duree_etudes': 5}
+                        st.session_state.projection_settings[prenom] = {
+                            'debut_etudes': 18, 
+                            'duree_etudes': 5,
+                            'cout_etudes_annuel': 10000
+                        }
                     st.session_state.projection_settings[prenom]['debut_etudes'] = st.number_input(f"Âge de début des études de {prenom}", 15, 25, st.session_state.projection_settings[prenom]['debut_etudes'], key=f"debut_{prenom}")
                     st.session_state.projection_settings[prenom]['duree_etudes'] = st.number_input(f"Durée des études de {prenom} (ans)", 1, 8, st.session_state.projection_settings[prenom]['duree_etudes'], key=f"duree_{prenom}")
+                    st.session_state.projection_settings[prenom]['cout_etudes_annuel'] = st.number_input(f"Coût annuel des études de {prenom} (€)", 0, 50000, st.session_state.projection_settings[prenom].get('cout_etudes_annuel', 10000), step=500, key=f"cout_etudes_{prenom}")
                     st.markdown("---")
     return duree_projection, st.session_state.projection_settings
 
@@ -335,17 +407,62 @@ def display_financial_projection(df_projection):
 
     st.subheader("Tableau de projection")
     df_display = df_projection.copy()
-    income_cols = [col for col in df_display.columns if 'Revenu' in col or 'Impôt' in col]
-    format_dict = {col: '{:,.0f} €' for col in income_cols}
-    st.dataframe(df_display.style.format(format_dict))
+    
+    # Identifier les colonnes monétaires à formater pour éviter les erreurs sur les colonnes de texte (Statut) ou d'âge.
+    money_cols = [
+        col for col in df_display.columns 
+        if 'Revenu' in col 
+        or 'Impôt' in col 
+        or 'Dépenses' in col
+        or 'Reste à vivre' in col
+        or 'Prêts' in col
+        or 'Charges' in col
+        or 'Taxes' in col
+        or 'Coût' in col
+        or 'Loyers' in col
+    ]
+    format_dict = {col: '{:,.0f} €' for col in money_cols}
+    st.dataframe(df_display.style.format(format_dict), use_container_width=True)
+    
+    st.subheader("Graphique de répartition des revenus")
+    
+    # Définir les colonnes à empiler, dans l'ordre souhaité
+    cols_to_stack = [
+        'Reste à vivre',
+        'Impôt sur le revenu',
+        'Coût des études',
+        'Autres Dépenses',
+        'Taxes Foncières',
+        'Charges Immobilières',
+        'Mensualités Prêts'
+    ]
+    
+    # Filtrer les colonnes qui existent réellement dans le df pour éviter les erreurs
+    existing_cols_to_stack = [col for col in cols_to_stack if col in df_projection.columns]
 
-    st.subheader("Graphique d'évolution des revenus et de l'impôt")
-    fig_proj = px.line(
-        df_projection, x='Année', y=['Revenus bruts du foyer', 'Impôt sur le revenu', 'Revenus nets du foyer'],
-        title="Évolution des finances du foyer",
-        labels={'value': 'Montant (€)', 'variable': 'Indicateur'}
+    # Créer le graphique à barres empilées
+    fig_bar = px.bar(
+        df_projection,
+        x='Année',
+        y=existing_cols_to_stack,
+        title="Répartition des revenus du foyer (Dépenses + Reste à vivre)",
+        labels={'value': 'Montant (€)', 'variable': 'Catégorie'},
+        height=500
     )
-    st.plotly_chart(fig_proj, use_container_width=True)
+
+    # Ajouter une ligne pour le total des revenus pour référence
+    if 'Revenus du foyer' in df_projection.columns:
+        fig_bar.add_scatter(
+            x=df_projection['Année'],
+            y=df_projection['Revenus du foyer'],
+            mode='lines',
+            name='Total des Revenus',
+            line=dict(color='black', width=2, dash='dot')
+        )
+
+    fig_bar.update_layout(barmode='stack', yaxis_title='Montant (€)', xaxis_title='Année', legend_title_text='Postes de dépenses et Reste à vivre')
+
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 # --- Exécution Principale ---
 

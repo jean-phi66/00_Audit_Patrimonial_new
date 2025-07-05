@@ -201,14 +201,76 @@ def display_summary():
     s_c2.metric("Total des Dépenses Mensuelles", f"{total_depenses:,.2f} €")
     s_c3.metric("Capacité d'Épargne Mensuelle", f"{capacite_epargne:,.2f} €", delta=f"{capacite_epargne:,.2f} €")
 
+    if capacite_epargne < 0:
+        st.warning(f"Attention : Vos dépenses ({total_depenses:,.2f} €) dépassent vos revenus ({total_revenus:,.2f} €). Vous avez un déficit mensuel de {-capacite_epargne:,.2f} €.")
+
     if st.session_state.depenses:
         st.markdown("---")
-        st.subheader("Répartition des Dépenses")
+        st.subheader("Répartition des Dépenses (Camembert)")
         df_depenses = pd.DataFrame(st.session_state.depenses)
         if not df_depenses.empty and df_depenses['montant'].sum() > 0:
             fig = px.pie(df_depenses, values='montant', names='categorie', title='Répartition des dépenses par catégorie', hole=.3)
             fig.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig, use_container_width=True)
+
+    # --- Ajout des Treemaps ---
+    st.markdown("---")
+    st.subheader("Répartition des Revenus (Dépenses + Reste à vivre)")
+
+    if total_revenus > 0:
+        # Préparation des données pour le treemap
+        df_depenses = pd.DataFrame(st.session_state.depenses)
+        if not df_depenses.empty and df_depenses['montant'].sum() > 0:
+            # Regrouper les dépenses par catégorie
+            depenses_par_cat = df_depenses.groupby('categorie')['montant'].sum().reset_index()
+            depenses_par_cat.rename(columns={'categorie': 'label'}, inplace=True)
+            data_treemap = depenses_par_cat.to_dict('records')
+        else:
+            data_treemap = []
+
+        # Ajouter le reste à vivre s'il est positif
+        if capacite_epargne > 0:
+            data_treemap.append({'label': 'Reste à vivre', 'montant': capacite_epargne})
+
+        if data_treemap:
+            df_treemap = pd.DataFrame(data_treemap)
+            
+            # Création des colonnes pour les graphiques
+            tm_col1, tm_col2 = st.columns(2)
+
+            with tm_col1:
+                # Treemap Mensuel
+                fig_mensuel = px.treemap(
+                    df_treemap,
+                    path=[px.Constant(f"Revenus Mensuels ({total_revenus:,.0f} €)"), 'label'],
+                    values='montant', title="Vue Mensuelle"
+                )
+                fig_mensuel.update_traces(
+                    texttemplate='%{label}<br><b>%{value:,.0f} €</b>',
+                    hovertemplate='%{label}: %{value:,.0f} €<extra></extra>',
+                    textfont_size=14
+                )
+                fig_mensuel.update_layout(margin=dict(t=50, l=10, r=10, b=10))
+                st.plotly_chart(fig_mensuel, use_container_width=True)
+
+            with tm_col2:
+                # Treemap Annuel
+                df_annuel = df_treemap.copy()
+                df_annuel['montant'] *= 12
+                total_revenus_annuel = total_revenus * 12
+                fig_annuel = px.treemap(
+                    df_annuel, path=[px.Constant(f"Revenus Annuels ({total_revenus_annuel:,.0f} €)"), 'label'],
+                    values='montant', title="Vue Annuelle"
+                )
+                fig_annuel.update_traces(
+                    texttemplate='%{label}<br><b>%{value:,.0f} €</b>',
+                    hovertemplate='%{label}: %{value:,.0f} €<extra></extra>',
+                    textfont_size=14
+                )
+                fig_annuel.update_layout(margin=dict(t=50, l=10, r=10, b=10))
+                st.plotly_chart(fig_annuel, use_container_width=True)
+    else:
+        st.info("Ajoutez des revenus pour visualiser leur répartition.")
 
 # --- Exécution Principale ---
 
