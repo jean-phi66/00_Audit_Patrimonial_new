@@ -439,24 +439,16 @@ def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-def display_financial_projection(df_projection, parents, settings):
-    """Affiche le tableau et le graphique de la projection financière."""
-    st.header("📈 Projection Financière Annuelle")
-    if not OPENFISCA_UTILITY_AVAILABLE:
-        st.warning("Le module OpenFisca n'est pas installé. Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\nPour un calcul précis, veuillez installer le package `openfisca-france`.")
-
-    if df_projection.empty:
-        st.info("Aucune donnée de projection financière à afficher.")
-        return
-
+def display_projection_table(df_projection):
+    """Affiche le tableau de la projection financière."""
     st.subheader("Tableau de projection")
     df_display = df_projection.copy()
-    
+
     # Identifier les colonnes monétaires à formater pour éviter les erreurs sur les colonnes de texte (Statut) ou d'âge.
     money_cols = [
-        col for col in df_display.columns 
-        if 'Revenu' in col 
-        or 'Impôt' in col 
+        col for col in df_display.columns
+        if 'Revenu' in col
+        or 'Impôt' in col
         or 'Dépenses' in col
         or 'Reste à vivre' in col
         or 'Prêts' in col
@@ -468,9 +460,11 @@ def display_financial_projection(df_projection, parents, settings):
     ]
     format_dict = {col: '{:,.0f} €' for col in money_cols}
     st.dataframe(df_display.style.format(format_dict), use_container_width=True)
-    
+
+def display_projection_chart(df_projection):
+    """Affiche le graphique de la projection financière."""
     st.subheader("Graphique de répartition des revenus")
-    
+
     # Définir les colonnes à empiler, dans l'ordre souhaité
     cols_to_stack = [
         'Reste à vivre',
@@ -482,7 +476,7 @@ def display_financial_projection(df_projection, parents, settings):
         'Charges Immobilières',
         'Mensualités Prêts'
     ]
-    
+
     # Filtrer les colonnes qui existent réellement dans le df pour éviter les erreurs
     existing_cols_to_stack = [col for col in cols_to_stack if col in df_projection.columns]
 
@@ -507,11 +501,12 @@ def display_financial_projection(df_projection, parents, settings):
         )
 
     fig_bar.update_layout(barmode='stack', yaxis_title='Montant (€)', xaxis_title='Année', legend_title_text='Postes de dépenses et Reste à vivre')
-
     st.plotly_chart(fig_bar, use_container_width=True)
 
+def display_tax_accumulation_chart(df_projection, parents, settings):
+    """Affiche le graphique du cumul de la fiscalité avec les points de retraite."""
     st.subheader("Graphique du cumul de la fiscalité")
-    st.markdown("Ce graphique montre le cumul de l'impôt sur le revenu et des prélèvements sociaux au fil des ans, hors taxes foncières.")
+    #st.markdown("Ce graphique montre le cumul de l'impôt sur le revenu et des prélèvements sociaux au fil des ans, hors taxes foncières.")
 
     # 1. Préparer les données
     df_fiscalite = df_projection[['Année', 'Impôt sur le revenu', 'Prélèvements Sociaux']].copy()
@@ -589,7 +584,18 @@ def main():
     display_gantt_chart(gantt_data, duree_projection, parents, enfants)
 
     df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
-    display_financial_projection(df_projection, parents, settings)
+
+    st.header("📈 Projection Financière Annuelle")
+    if not OPENFISCA_UTILITY_AVAILABLE:
+        st.warning("Le module OpenFisca n'est pas installé. Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\nPour un calcul précis, veuillez installer le package `openfisca-france`.")
+
+    if df_projection.empty:
+        st.info("Aucune donnée de projection financière à afficher.")
+    else:
+        with st.expander("Détails de la projection financière"):
+            display_projection_table(df_projection)
+        display_projection_chart(df_projection)
+        display_tax_accumulation_chart(df_projection, parents, settings)
 
 if __name__ == "__main__":
     main()
