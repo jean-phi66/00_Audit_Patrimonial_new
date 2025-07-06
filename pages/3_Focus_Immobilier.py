@@ -1,5 +1,9 @@
 import streamlit as st
 import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
+from datetime import date
+import plotly.express as px
 from core.patrimoine_logic import (
     calculate_gross_yield,
     calculate_net_yield_charges,
@@ -8,7 +12,7 @@ from core.patrimoine_logic import (
     calculate_savings_effort,
     find_associated_loan,
     calculate_loan_annual_breakdown
-)
+) 
 
 def calculate_property_metrics(asset, passifs, tmi, social_tax):
     """Calcule toutes les métriques de performance pour un bien immobilier."""
@@ -62,9 +66,9 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax):
 
     return metrics
 
-def display_property_analysis(asset, metrics):
+def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projection_duration):
     """Affiche les métriques de rentabilité pré-calculées pour un bien immobilier."""
-    
+
     with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')}", expanded=True):
         # --- Affichage des métriques principales ---
         col1, col2, col3, col4 = st.columns(4)
@@ -176,6 +180,95 @@ def display_property_analysis(asset, metrics):
                 help=metrics['leverage_help_text']
             )
 
+        # --- Projections ---
+        loan = find_associated_loan(asset.get('id'), passifs)
+        df_projection = generate_projection_data(asset, loan, tmi, social_tax, projection_duration)
+        if not df_projection.empty:
+            display_projection_charts(df_projection, projection_duration)
+
+
+def generate_projection_data(asset, loan, tmi_pct, social_tax_pct, projection_duration):
+    """Génère les données de projection pour le cash-flow et l'effet de levier."""
+    projection_data = []
+    start_year = date.today().year
+
+    for year in range(start_year, start_year + projection_duration + 1):
+        # 1. Calcul du capital remboursé pour l'année
+        loan_breakdown = calculate_loan_annual_breakdown(loan, year=year)
+        capital_rembourse_annuel = loan_breakdown.get('capital', 0)
+
+        # 2. Calcul de l'impôt pour l'année
+        tax_info = calculate_property_tax(asset, loan, tmi_pct, social_tax_pct, year=year)
+
+        # 3. Calcul du cash-flow pour l'année
+        cash_flow_mensuel = calculate_savings_effort(asset, loan, tax_info['total'], year=year)
+        cash_flow_annuel = cash_flow_mensuel * 12
+
+        # 4. Calcul de l'effet de levier
+        effort_epargne_annuel = -cash_flow_annuel
+        leverage = np.nan # Par défaut, pas de levier calculable
+        if effort_epargne_annuel > 0 and capital_rembourse_annuel > 0:
+            leverage = capital_rembourse_annuel / effort_epargne_annuel
+        
+        projection_data.append({
+            'Année': year,
+            'Cash-flow Annuel': cash_flow_annuel,
+            'Effet de Levier': leverage,
+            'Capital Remboursé': capital_rembourse_annuel,
+            'Effort d\'Épargne': effort_epargne_annuel
+        })
+
+    return pd.DataFrame(projection_data)
+
+def create_cash_flow_projection_fig(df_projection):
+    """Crée la figure du graphique de projection du cash-flow."""
+    df_projection['Couleur Cash-flow'] = np.where(df_projection['Cash-flow Annuel'] < 0, 'Négatif', 'Positif')
+    fig = px.bar(
+        df_projection, x='Année', y='Cash-flow Annuel',
+        color='Couleur Cash-flow', color_discrete_map={'Négatif': '#FF5733', 'Positif': '#33C7FF'},
+        labels={'Cash-flow Annuel': 'Cash-flow Annuel (€)'},
+        hover_data={'Effort d\'Épargne': ':,.2f €'},
+        title="Évolution du Cash-flow Annuel"
+    )
+    fig.update_layout(showlegend=False, yaxis_title="Montant (€)")
+    return fig
+
+def create_leverage_projection_fig(df_projection):
+    """Crée la figure du graphique de projection de l'effet de levier."""
+    df_plot_leverage = df_projection.dropna(subset=['Effet de Levier'])
+    fig = px.line(
+        df_plot_leverage, x='Année', y='Effet de Levier', markers=True,
+        labels={'Effet de Levier': 'Ratio de Levier'},
+        hover_data={'Capital Remboursé': ':,.2f €', 'Effort d\'Épargne': ':,.2f €'},
+        title="Évolution de l'Effet de Levier"
+    )
+    fig.update_traces(connectgaps=False)
+
+    if not df_plot_leverage.empty:
+        max_leverage = df_plot_leverage['Effet de Levier'].max()
+        y_axis_max = max(max_leverage * 1.2, 2)
+    else:
+        y_axis_max = 5
+
+    fig.update_layout(yaxis_title="Ratio (Capital créé / Effort d'épargne)", yaxis=dict(range=[0, y_axis_max]))
+    return fig
+
+def display_projection_charts(df_projection, projection_duration):
+    """Affiche les graphiques de projection."""
+    st.markdown("---")
+    st.subheader(f"📈 Projections sur {projection_duration} ans")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig_cash_flow = create_cash_flow_projection_fig(df_projection)
+        st.plotly_chart(fig_cash_flow, use_container_width=True)
+
+    with col2:
+        fig_leverage = create_leverage_projection_fig(df_projection)
+        st.plotly_chart(fig_leverage, use_container_width=True)
+        st.caption("L'effet de levier est calculé uniquement lorsque le cash-flow est négatif (effort d'épargne positif). Un ratio de 2 signifie que pour 1€ d'effort, 2€ de capital sont créés.")
+
 def main():
     """Fonction principale pour exécuter la page Focus Immobilier."""
     st.title("🔎 Focus Immobilier")
@@ -194,14 +287,27 @@ def main():
 
     # --- Paramètres de simulation ---
     st.sidebar.header("Hypothèses de calcul")
-    tmi = st.sidebar.select_slider(
+    # Initialisation dans le session_state pour les rendre accessibles au rapport
+    if 'immo_tmi' not in st.session_state:
+        st.session_state.immo_tmi = 30
+    if 'immo_projection_duration' not in st.session_state:
+        st.session_state.immo_projection_duration = 15
+
+    st.session_state.immo_tmi = st.sidebar.select_slider(
         "Votre Taux Marginal d'Imposition (TMI)",
         options=[0, 11, 30, 41, 45],
-        value=30,
+        value=st.session_state.immo_tmi,
         help="Le TMI est le taux d'imposition qui s'applique à la dernière tranche de vos revenus. Il est essentiel pour calculer l'impôt sur les revenus fonciers."
     )
     social_tax = 17.2 # Taux des prélèvements sociaux
     st.sidebar.info(f"Les prélèvements sociaux sont fixés à **{social_tax}%**.")
+
+    st.sidebar.markdown("---")
+    st.sidebar.header("Paramètres de Projection")
+    st.session_state.immo_projection_duration = st.sidebar.number_input(
+        "Durée de la projection (ans)",
+        min_value=1, max_value=40, value=st.session_state.immo_projection_duration, step=1
+    )
 
     st.markdown("---")
 
@@ -210,8 +316,8 @@ def main():
     for asset in productive_assets:
         # Vérifier que les données nécessaires sont présentes
         if asset.get('loyers_mensuels') is not None:
-            metrics = calculate_property_metrics(asset, passifs, tmi, social_tax)
-            display_property_analysis(asset, metrics)
+            metrics = calculate_property_metrics(asset, passifs, st.session_state.immo_tmi, social_tax)
+            display_property_analysis(asset, metrics, passifs, st.session_state.immo_tmi, social_tax, st.session_state.immo_projection_duration)
         else:
             st.warning(f"Les données de loyers pour **{asset.get('libelle')}** ne sont pas renseignées dans la page Patrimoine.")
 

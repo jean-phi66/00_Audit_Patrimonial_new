@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import date
 import uuid
 import streamlit as st
-
+from datetime import date
 # --- Fonctions de calcul de prêt ---
 
 def calculate_monthly_payment(principal, annual_rate_pct, duration_months):
@@ -198,14 +198,17 @@ def calculate_net_yield_charges(asset):
     revenu_net_charges = loyers_annuels - charges_annuelles - taxe_fonciere
     return (revenu_net_charges / valeur_achat) * 100
 
-def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct):
+def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct, year=None):
     """Calcule l'impôt total (IR + PS) sur les revenus fonciers au régime réel."""
+    if year is None:
+        year = date.today().year
+
     loyers_annuels = asset.get('loyers_mensuels', 0) * 12
     charges_annuelles = asset.get('charges', 0) * 12
     taxe_fonciere = asset.get('taxe_fonciere', 0)
     
     # Utilisation de la fonction précise pour les intérêts
-    loan_breakdown = calculate_loan_annual_breakdown(loan)
+    loan_breakdown = calculate_loan_annual_breakdown(loan, year=year)
     interets_emprunt = loan_breakdown['interest']
 
     charges_deductibles = charges_annuelles + taxe_fonciere + interets_emprunt
@@ -219,14 +222,13 @@ def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct):
     if asset.get('dispositif_fiscal') == 'Pinel':
         annee_debut = asset.get('annee_debut_dispositif')
         duree = asset.get('duree_dispositif')
-        annee_actuelle = date.today().year
-
-        if annee_debut and duree and (annee_debut <= annee_actuelle < annee_debut + duree):
+        
+        if annee_debut and duree and (annee_debut <= year < annee_debut + duree):
             # Le calcul de la réduction se base sur la valeur d'achat, plafonnée à 300 000 €
             base_calcul = min(asset.get('valeur', 0), 300000)
             
             # Taux annuel : 2% les 9 premières années, 1% de la 10e à la 12e
-            annees_ecoulees = annee_actuelle - annee_debut
+            annees_ecoulees = year - annee_debut
             if 0 <= annees_ecoulees < 9:
                 taux_reduction_annuel = 0.02
             elif 9 <= annees_ecoulees < 12 and duree == 12:
@@ -256,12 +258,18 @@ def calculate_net_yield_tax(asset, total_annual_tax):
     revenu_final = loyers_annuels - charges_annuelles - taxe_fonciere - total_annual_tax
     return (revenu_final / valeur_achat) * 100
 
-def calculate_savings_effort(asset, loan, total_annual_tax):
-    """Calcule le cash-flow mensuel (effort d'épargne)."""
+def calculate_savings_effort(asset, loan, total_annual_tax, year=None):
+    """Calcule le cash-flow mensuel (effort d'épargne) pour une année donnée."""
+    if year is None:
+        year = date.today().year
+        
     loyers_mensuels = asset.get('loyers_mensuels', 0)
     charges_mensuelles = asset.get('charges', 0)
     taxe_fonciere_mensuelle = asset.get('taxe_fonciere', 0) / 12
-    mensualite_pret = calculate_monthly_payment(loan['montant_initial'], loan['taux_annuel'], loan['duree_mois']) if loan else 0
-    
+
+    # Calculer la mensualité pour l'année donnée. Elle est de 0 si le prêt est terminé.
+    paiement_annuel_pret = calculate_loan_annual_breakdown(loan, year=year).get('total_paid', 0) if loan else 0
+    mensualite_pret = paiement_annuel_pret / 12
+
     cash_flow = loyers_mensuels - charges_mensuelles - taxe_fonciere_mensuelle - mensualite_pret - (total_annual_tax / 12)
     return cash_flow
