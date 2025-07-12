@@ -1,8 +1,30 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import uuid
+from datetime import date
 from core.patrimoine_logic import calculate_monthly_payment
+
+# --- Constantes ---
+INSEE_DECILES_2021 = {
+    "D1 (10%)": 11580, "D2 (20%)": 14660, "D3 (30%)": 17350,
+    "D4 (40%)": 19980, "D5 (Médiane)": 22850, "D6 (60%)": 25990,
+    "D7 (70%)": 29810, "D8 (80%)": 35020, "D9 (90%)": 42960,
+}
+
+# --- Fonctions de calcul ---
+def calculate_age(born):
+    """Calcule l'âge à partir d'une date de naissance."""
+    if not born: return 0
+    today = date.today()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+def calculate_consumption_units(parents, enfants):
+    """Calcule le nombre d'unités de consommation (UC) du foyer."""
+    if not parents: return 1.0
+    all_members = parents[1:] + enfants
+    return 1.0 + sum(0.3 if calculate_age(m.get('date_naissance')) < 14 else 0.5 for m in all_members)
 
 # --- Fonctions de gestion de la page ---
 
@@ -272,6 +294,65 @@ def display_summary():
                 st.plotly_chart(fig_annuel, use_container_width=True)
     else:
         st.info("Ajoutez des revenus pour visualiser leur répartition.")
+
+    # Ajout de la section de comparaison des revenus
+    display_income_comparison_ui(total_revenus, st.session_state.depenses)
+
+def display_income_comparison_ui(total_revenus_mensuels, depenses):
+    """Affiche la comparaison du niveau de vie du foyer avec les données nationales."""
+    st.markdown("---")
+    st.header("👪 Positionnement du Foyer")
+    st.markdown("Cette section compare le **niveau de vie** de votre foyer à la moyenne nationale française, sur la base des données de l'INSEE (2021).")
+
+    # 1. Calcul des unités de consommation
+    parents = st.session_state.get('parents', [])
+    enfants = st.session_state.get('enfants', [])
+    uc = calculate_consumption_units(parents, enfants)
+
+    # 2. Calcul du revenu disponible annuel
+    impots_et_taxes_mensuels = sum(d.get('montant', 0.0) for d in depenses if d.get('categorie') == 'Impôts et taxes')
+    revenu_disponible_annuel = (total_revenus_mensuels - impots_et_taxes_mensuels) * 12
+
+    if uc <= 0:
+        st.warning("Le nombre d'unités de consommation est de 0. Impossible de calculer le niveau de vie.")
+        return
+
+    niveau_de_vie_foyer = revenu_disponible_annuel / uc
+
+    # 3. Affichage des métriques
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Unités de Consommation (UC)", f"{uc:.2f} UC", help="Le premier adulte compte pour 1 UC, chaque personne de +14 ans pour 0.5 UC, et chaque enfant de -14 ans pour 0.3 UC.")
+    col2.metric("Revenu Disponible Annuel", f"{revenu_disponible_annuel:,.0f} €", help="Total des revenus annuels moins les impôts et taxes directs.")
+    col3.metric("Niveau de Vie par UC", f"{niveau_de_vie_foyer:,.0f} € / an", help="Revenu disponible annuel divisé par le nombre d'UC. C'est cet indicateur qui est comparé aux données nationales.")
+
+    # 4. Création du graphique de comparaison
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=['Votre Foyer'], x=[niveau_de_vie_foyer], name='Votre Niveau de Vie', orientation='h',
+        marker=dict(color='rgba(23, 103, 166, 0.8)', line=dict(color='rgba(23, 103, 166, 1.0)', width=1)),
+        text=f"<b>{niveau_de_vie_foyer:,.0f} €</b>", textposition='inside', insidetextanchor='middle'
+    ))
+
+    for label, value in INSEE_DECILES_2021.items():
+        fig.add_vline(
+            x=value, line_width=1, line_dash="dash", line_color="grey",
+            annotation_text=f"<b>{label.split(' ')[0]}</b><br>{value:,.0f}€",
+            annotation_position="top", annotation_font_size=10
+        )
+
+    decile_atteint = next((label for label, value in sorted(INSEE_DECILES_2021.items(), key=lambda item: item[1], reverse=True) if niveau_de_vie_foyer >= value), None)
+    if decile_atteint:
+        st.success(f"🎉 Félicitations ! Votre niveau de vie vous place au-dessus du **{decile_atteint}** des foyers français.")
+    else:
+        st.info("Votre niveau de vie se situe dans le premier décile des foyers français.")
+
+    fig.update_layout(
+        title_text="Positionnement de votre niveau de vie par rapport aux déciles français (INSEE 2021)",
+        xaxis_title="Niveau de vie annuel par Unité de Consommation (€)", yaxis_title="",
+        showlegend=False, height=300, margin=dict(l=20, r=20, t=80, b=20), bargap=0.5,
+        xaxis_range=[0, max(niveau_de_vie_foyer * 1.2, 50000)]
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # --- Exécution Principale ---
 
