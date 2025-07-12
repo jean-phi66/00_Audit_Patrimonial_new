@@ -5,13 +5,18 @@ import io
 import pandas as pd
 import plotly.io as pio
 import importlib
-from core.patrimoine_logic import get_patrimoine_df, find_associated_loan
+from core.patrimoine_logic import get_patrimoine_df, find_associated_loan, calculate_crd
 
-# Importation dynamique du module car son nom commence par un chiffre, ce qui est un identifiant invalide.
+# Importation dynamique des modules de page car leurs noms commencent par des chiffres
 focus_immo_module = importlib.import_module("pages.3_Focus_Immobilier")
 generate_projection_data = focus_immo_module.generate_projection_data
 create_cash_flow_projection_fig = focus_immo_module.create_cash_flow_projection_fig
 create_leverage_projection_fig = focus_immo_module.create_leverage_projection_fig
+
+patrimoine_module = importlib.import_module("pages.2_Patrimoine")
+create_patrimoine_brut_treemap = patrimoine_module.create_patrimoine_brut_treemap
+create_patrimoine_net_treemap = patrimoine_module.create_patrimoine_net_treemap
+create_patrimoine_net_donut = patrimoine_module.create_patrimoine_net_donut
 
 try:
     from fpdf import FPDF
@@ -164,11 +169,60 @@ def add_patrimoine_section(pdf, actifs, passifs):
     df_display = df_patrimoine[['Libellé', 'Type', 'Valeur Brute', 'Passif', 'Valeur Nette']]
     col_widths = [60, 40, 30, 30, 30]
     pdf.add_table(df_display, col_widths, "Détail du patrimoine")
+    return df_patrimoine # Retourner le dataframe pour les graphiques
+
+def add_patrimoine_charts_section(pdf, df_patrimoine):
+    """Ajoute les graphiques de répartition du patrimoine au rapport."""
+    if df_patrimoine.empty or df_patrimoine['Valeur Brute'].sum() <= 0:
+        return # Ne pas créer de page vide si pas de patrimoine
+
+    pdf.add_page()
+    pdf.chapter_title("3. Visualisation du Patrimoine")
+
+    page_width = pdf.w - 2 * pdf.l_margin
+    img_width = page_width / 2 - 5
+
+    # --- Graphiques Treemap ---
+    pdf.set_font(pdf.font_family_name, 'B', 12)
+    pdf.cell(0, 10, "Répartition Détaillée du Patrimoine", 0, 1, 'L')
+
+    try:
+        fig_brut = create_patrimoine_brut_treemap(df_patrimoine)
+        fig_net = create_patrimoine_net_treemap(df_patrimoine)
+
+        if fig_brut and fig_net:
+            # Ajout de titres aux graphiques avant de les exporter
+            fig_brut.update_layout(title_text="Patrimoine Brut")
+            fig_net.update_layout(title_text="Patrimoine Net")
+
+            img_brut_bytes = pio.to_image(fig_brut, format="png", width=500, height=350, scale=2)
+            img_net_bytes = pio.to_image(fig_net, format="png", width=500, height=350, scale=2)
+
+            y_pos = pdf.get_y()
+            pdf.image(io.BytesIO(img_brut_bytes), w=img_width)
+            pdf.set_xy(pdf.l_margin + img_width + 10, y_pos)
+            pdf.image(io.BytesIO(img_net_bytes), w=img_width)
+            pdf.ln(img_width * 0.7 + 5) # Hauteur de l'image + marge
+
+    except Exception as e:
+        pdf.set_text_color(255, 0, 0)
+        pdf.multi_cell(0, 5, f"Erreur lors de la génération des treemaps : {e}")
+        pdf.set_text_color(0, 0, 0)
+
+    # --- Graphique Donut ---
+    pdf.ln(10)
+    pdf.set_font(pdf.font_family_name, 'B', 12)
+    pdf.cell(0, 10, "Répartition par Type d'Actif (Net)", 0, 1, 'L')
+    fig_donut = create_patrimoine_net_donut(df_patrimoine)
+    if fig_donut:
+        img_donut_bytes = pio.to_image(fig_donut, format="png", width=600, height=400, scale=2)
+        x_pos = (pdf.w - page_width * 0.75) / 2
+        pdf.image(io.BytesIO(img_donut_bytes), x=x_pos, w=page_width * 0.75)
 
 def add_flux_section(pdf, revenus, depenses):
     """Ajoute la section sur les flux financiers."""
     pdf.add_page()
-    pdf.chapter_title("3. Flux Financiers Mensuels")
+    pdf.chapter_title("4. Flux Financiers Mensuels")
 
     total_revenus = sum(r.get('montant', 0.0) for r in revenus)
     total_depenses = sum(d.get('montant', 0.0) for d in depenses)
@@ -197,7 +251,7 @@ def add_immo_focus_section(pdf, actifs, passifs):
         return
 
     pdf.add_page()
-    pdf.chapter_title("4. Focus Immobilier")
+    pdf.chapter_title("5. Focus Immobilier")
 
     # Récupérer les paramètres de simulation depuis le session_state
     tmi = st.session_state.get('immo_tmi', 30)
@@ -254,12 +308,16 @@ def generate_report(parents, enfants, actifs, passifs, revenus, depenses):
     add_family_section(pdf, parents, enfants)
 
     # 3. Section Patrimoine
-    add_patrimoine_section(pdf, actifs, passifs)
+    df_patrimoine = add_patrimoine_section(pdf, actifs, passifs)
 
-    # 4. Section Flux
+    # 4. Section Graphiques Patrimoine
+    if df_patrimoine is not None and not df_patrimoine.empty:
+        add_patrimoine_charts_section(pdf, df_patrimoine)
+
+    # 5. Section Flux
     add_flux_section(pdf, revenus, depenses)
 
-    # 5. Section Focus Immobilier
+    # 6. Section Focus Immobilier
     add_immo_focus_section(pdf, actifs, passifs)
 
     # Génération du PDF en mémoire

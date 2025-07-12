@@ -5,6 +5,17 @@ import pandas as pd
 import plotly.express as px
 from core.patrimoine_logic import calculate_monthly_payment, calculate_crd, get_patrimoine_df, add_item, remove_item
 
+# --- Constantes et Configuration ---
+
+# Palette de couleurs unifiée pour tous les graphiques de la page
+# Utilisation de la palette "Vivid" pour des couleurs vives et contrastées.
+ASSET_TYPE_COLOR_MAP = {
+    'Immobilier de jouissance': px.colors.qualitative.Vivid[0],
+    'Immobilier productif': px.colors.qualitative.Vivid[1],
+    'Actifs financiers': px.colors.qualitative.Vivid[2],
+    'Autres actifs': px.colors.qualitative.Vivid[4],
+    'Placements financiers': px.colors.qualitative.Vivid[2], # Pour le graphique "cible"
+}
 # --- Fonctions de configuration et de migration ---
 
 def initialize_session_state():
@@ -188,82 +199,113 @@ def display_summary_and_charts():
         hide_index=True
     )
 
-
-    chart_col1, chart_col2 = st.columns(2)
+    chart_col1, chart_col2 = st.columns(2, gap="medium")
     with chart_col1:
         st.subheader("Répartition du Patrimoine Brut")
-        df_brut = df_patrimoine[df_patrimoine['Valeur Brute'] > 0]
-        if not df_brut.empty:
-            fig = px.treemap(df_brut, path=[px.Constant("Total"), 'Type', 'Libellé'], values='Valeur Brute', color='Type', hover_data={'Valeur Brute': ':,.2f €'})
-            fig.update_traces(textinfo='label+percent root', textfont_size=14)
-            fig.update_layout(margin=dict(t=30, l=10, r=10, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+        fig_brut = create_patrimoine_brut_treemap(df_patrimoine, ASSET_TYPE_COLOR_MAP)
+        if fig_brut:
+            st.plotly_chart(fig_brut, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur brute positive à afficher.")
 
     with chart_col2:
         st.subheader("Répartition du Patrimoine Net")
-        df_net = df_patrimoine[df_patrimoine['Valeur Nette'] > 0]
-        if not df_net.empty:
-            fig = px.treemap(df_net, path=[px.Constant("Total"), 'Type', 'Libellé'], values='Valeur Nette', color='Type', hover_data={'Valeur Nette': ':,.2f €'})
-            fig.update_traces(textinfo='label+percent root', textfont_size=14)
-            fig.update_layout(margin=dict(t=30, l=10, r=10, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+        fig_net = create_patrimoine_net_treemap(df_patrimoine, ASSET_TYPE_COLOR_MAP)
+        if fig_net:
+            st.plotly_chart(fig_net, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur nette positive à afficher.")
 
     st.markdown("---")
     st.header("Analyse de la Répartition")
 
-    # Définir une palette de couleurs cohérente pour les graphiques
-    color_map = {
-        'Immobilier de jouissance': px.colors.qualitative.Plotly[0],
-        'Immobilier productif': px.colors.qualitative.Plotly[1],
-        'Actifs financiers': px.colors.qualitative.Plotly[2],
-        'Placements financiers': px.colors.qualitative.Plotly[2], # Même couleur pour la cible
-        'Autres actifs': px.colors.qualitative.Plotly[3]
-    }
     donut_col1, donut_col2 = st.columns(2)
 
     with donut_col1:
         st.subheader("Répartition Actuelle (Nette)")
-        df_net_by_type = df_patrimoine[df_patrimoine['Valeur Nette'] > 0].groupby('Type')['Valeur Nette'].sum().reset_index()
-        if not df_net_by_type.empty:
-            fig_donut_actual = px.pie(
-                df_net_by_type,
-                names='Type',
-                values='Valeur Nette',
-                #title="Patrimoine Net par Type d'Actif",
-                hole=0.4,
-                color='Type',
-                color_discrete_map=color_map
-            )
-            fig_donut_actual.update_traces(textposition='inside', textinfo='percent+label')
-            fig_donut_actual.update_layout(showlegend=True, legend_title_text='Type d\'Actif', margin=dict(t=50, l=10, r=10, b=10))
+        fig_donut_actual = create_patrimoine_net_donut(df_patrimoine, ASSET_TYPE_COLOR_MAP)
+        if fig_donut_actual:
             st.plotly_chart(fig_donut_actual, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur nette positive à afficher.")
 
     with donut_col2:
         st.subheader("Répartition Cible Théorique")
-        ideal_data = {
-            'Catégorie': ['Immobilier de jouissance', 'Immobilier productif', 'Placements financiers'],
-            'Pourcentage': [33.33, 33.33, 33.34]
-        }
-        df_ideal = pd.DataFrame(ideal_data)
-        fig_donut_ideal = px.pie(
-            df_ideal,
-            names='Catégorie',
-            values='Pourcentage',
-            #title="Modèle de Répartition en Tiers",
-            hole=0.4,
-            color='Catégorie',
-            color_discrete_map=color_map
-        )
-        fig_donut_ideal.update_traces(textposition='inside', textinfo='percent+label')
-        fig_donut_ideal.update_layout(showlegend=True, legend_title_text='Catégorie', margin=dict(t=50, l=10, r=10, b=10))
+        fig_donut_ideal = create_patrimoine_ideal_donut(ASSET_TYPE_COLOR_MAP)
         st.plotly_chart(fig_donut_ideal, use_container_width=True)
 
+def create_patrimoine_brut_treemap(df_patrimoine, color_map):
+    """Crée le treemap de répartition du patrimoine brut."""
+    df_brut = df_patrimoine[df_patrimoine['Valeur Brute'] > 0]
+    if not df_brut.empty:
+        fig = px.treemap(
+            df_brut, 
+            path=['Type', 'Libellé'], 
+            values='Valeur Brute', 
+            color='Type', 
+            color_discrete_map=color_map,
+            hover_data={'Valeur Brute': ':,.2f €'}
+        )
+        fig.update_traces(textinfo='label+percent root', textfont_size=14)
+        fig.update_layout(margin=dict(t=10, l=10, r=10, b=10))
+        return fig
+    else:
+        return None
+
+def create_patrimoine_net_treemap(df_patrimoine, color_map):
+    """Crée le treemap de répartition du patrimoine net."""
+    df_net = df_patrimoine[df_patrimoine['Valeur Nette'] > 0]
+    if not df_net.empty:
+        fig = px.treemap(
+            df_net, 
+            path=['Type', 'Libellé'], 
+            values='Valeur Nette', 
+            color='Type', 
+            color_discrete_map=color_map,
+            hover_data={'Valeur Nette': ':,.2f €'}
+        )
+        fig.update_traces(textinfo='label+percent root', textfont_size=14)
+        fig.update_layout(margin=dict(t=10, l=10, r=10, b=10))
+        return fig
+    else:
+        return None
+
+def create_patrimoine_net_donut(df_patrimoine, color_map):
+    """Crée le donut chart de répartition du patrimoine net par type d'actif."""
+    df_net_by_type = df_patrimoine[df_patrimoine['Valeur Nette'] > 0].groupby('Type')['Valeur Nette'].sum().reset_index()
+    if not df_net_by_type.empty:
+        fig = px.pie(
+            df_net_by_type,
+            names='Type',
+            values='Valeur Nette',
+            hole=0.4,
+            color='Type',
+            color_discrete_map=color_map
+        )
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_layout(showlegend=True, legend_title_text='Type d\'Actif', margin=dict(t=50, l=10, r=10, b=10))
+        return fig
+    else:
+        return None
+
+def create_patrimoine_ideal_donut(color_map):
+    """Crée le donut chart de répartition cible idéale du patrimoine."""
+    ideal_data = {
+        'Catégorie': ['Immobilier de jouissance', 'Immobilier productif', 'Placements financiers'],
+        'Pourcentage': [33.33, 33.33, 33.34]
+    }
+    df_ideal = pd.DataFrame(ideal_data)
+    fig = px.pie(
+        df_ideal,
+        names='Catégorie',
+        values='Pourcentage',
+        hole=0.4,
+        color='Catégorie',
+        color_discrete_map=color_map
+    )
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    fig.update_layout(showlegend=True, legend_title_text='Catégorie', margin=dict(t=50, l=10, r=10, b=10))
+    return fig
 # --- Exécution Principale ---
 
 def main():
