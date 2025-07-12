@@ -12,6 +12,11 @@ INSEE_DECILES_2021 = {
     "D4 (40%)": 19980, "D5 (Médiane)": 22850, "D6 (60%)": 25990,
     "D7 (70%)": 29810, "D8 (80%)": 35020, "D9 (90%)": 42960,
 }
+# Taux d'épargne par décile de niveau de vie. Source: Insee, enquête Budget de famille 2017.
+INSEE_SAVINGS_RATE_2017 = {
+    1: -20.1, 2: -3.8, 3: 1.8, 4: 5.7, 5: 8.8,
+    6: 11.6, 7: 14.3, 8: 17.5, 9: 22.1, 10: 35.1
+}
 
 # --- Fonctions de calcul ---
 def calculate_age(born):
@@ -19,6 +24,14 @@ def calculate_age(born):
     if not born: return 0
     today = date.today()
     return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+def find_decile(niveau_de_vie, deciles_data):
+    """Trouve le décile de niveau de vie (de 1 à 10)."""
+    decile_bounds = sorted(deciles_data.values())
+    for i, upper_bound in enumerate(decile_bounds):
+        if niveau_de_vie <= upper_bound:
+            return i + 1
+    return 10
 
 def calculate_consumption_units(parents, enfants):
     """Calcule le nombre d'unités de consommation (UC) du foyer."""
@@ -296,9 +309,9 @@ def display_summary():
         st.info("Ajoutez des revenus pour visualiser leur répartition.")
 
     # Ajout de la section de comparaison des revenus
-    display_income_comparison_ui(total_revenus, st.session_state.depenses)
+    display_income_comparison_ui(total_revenus, st.session_state.depenses, capacite_epargne)
 
-def display_income_comparison_ui(total_revenus_mensuels, depenses):
+def display_income_comparison_ui(total_revenus_mensuels, depenses, capacite_epargne_mensuelle):
     """Affiche la comparaison du niveau de vie du foyer avec les données nationales."""
     st.markdown("---")
     st.header("👪 Positionnement du Foyer")
@@ -353,6 +366,47 @@ def display_income_comparison_ui(total_revenus_mensuels, depenses):
         xaxis_range=[0, max(niveau_de_vie_foyer * 1.2, 50000)]
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # --- Section Taux d'épargne ---
+    st.markdown("---")
+    st.subheader("Comparaison du Taux d'Épargne")
+
+    # 1. Calculer le taux d'épargne du foyer
+    revenu_disponible_mensuel = max(0, total_revenus_mensuels - impots_et_taxes_mensuels)
+
+    # 2. Trouver le décile et le taux d'épargne cible
+    decile_foyer = find_decile(niveau_de_vie_foyer, INSEE_DECILES_2021)
+    taux_epargne_cible_pct = INSEE_SAVINGS_RATE_2017.get(decile_foyer, 0)
+    epargne_cible_mensuelle = revenu_disponible_mensuel * (taux_epargne_cible_pct / 100)
+
+    # 3. Afficher la jauge
+    col_savings1, col_savings2 = st.columns([1, 2])
+    with col_savings1:
+        st.metric(
+            label="Votre Épargne Mensuelle",
+            value=f"{capacite_epargne_mensuelle:,.0f} €",
+            delta=f"{capacite_epargne_mensuelle - epargne_cible_mensuelle:,.0f} € vs. moyenne"
+        )
+        st.metric(
+            label=f"Épargne Moyenne ({decile_foyer}e décile)",
+            value=f"{epargne_cible_mensuelle:,.0f} €",
+            help=f"Montant d'épargne mensuel moyen pour un foyer du {decile_foyer}e décile, correspondant à un taux de {taux_epargne_cible_pct}% du revenu disponible (Source: INSEE 2017)."
+        )
+
+    with col_savings2:
+        # Définir une plage dynamique pour la jauge
+        min_range = min(-100, capacite_epargne_mensuelle * 1.2, epargne_cible_mensuelle * 1.2)
+        max_range = max(100, capacite_epargne_mensuelle * 1.2, epargne_cible_mensuelle * 1.2)
+
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = capacite_epargne_mensuelle,
+            number = {'prefix': "€ ", 'font': {'size': 40}},
+            title = {"text": f"Épargne mensuelle (Cible: {epargne_cible_mensuelle:,.0f} €)", 'font': {'size': 18}},
+            delta = {'reference': epargne_cible_mensuelle, 'increasing': {'color': "green"}, 'decreasing': {'color': "red"}},
+            gauge = {'axis': {'range': [min_range, max_range]}, 'bar': {'color': "darkblue"}, 'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': epargne_cible_mensuelle}}))
+        fig_gauge.update_layout(height=250, margin=dict(t=50, b=20, l=30, r=30))
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
 # --- Exécution Principale ---
 
