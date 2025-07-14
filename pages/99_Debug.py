@@ -1,12 +1,22 @@
 import streamlit as st
 from datetime import date
 
+import sys
+import os
+# Add project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+
 try:
     # Tentative d'import de la fonction à tester
     from utils.openfisca_utils import calculer_impot_openfisca
     OPENFISCA_UTILITY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     OPENFISCA_UTILITY_AVAILABLE = False
+    # Store the specific error for more informative messages
+    st.session_state.openfisca_import_error = str(e)
     
 st.set_page_config(layout="wide")
 
@@ -33,9 +43,12 @@ st.write("---")
 st.header("🧪 Test du calcul d'impôt (OpenFisca)")
 
 if not OPENFISCA_UTILITY_AVAILABLE:
+    error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
     st.error(
-        "La fonction `calculer_impot_openfisca` n'a pas pu être importée depuis `utils/openfisca_utils.py`.\n\n"
-        "Vérifiez que le fichier existe et ne contient pas d'erreur de syntaxe."
+        "**La fonction `calculer_impot_openfisca` n'a pas pu être importée.**\n\n"
+        f"**Erreur technique :** `{error_msg}`\n\n"
+        "Cela est souvent dû à une dépendance manquante. Assurez-vous d'avoir installé `openfisca-france`:\n"
+        "`pip install openfisca-france`"
     )
 elif 'parents' not in st.session_state or not st.session_state.parents:
     st.warning("Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille** pour pouvoir tester le calcul d'impôt.")

@@ -3,14 +3,23 @@ import pandas as pd
 import plotly.figure_factory as ff
 from datetime import date, timedelta
 import plotly.express as px
+
+import sys
+import os
+# Add project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loan
 
 try:
-    from utils.openfisca_utils import calculer_impot_openfisca
+    from utils.openfisca_utils import analyser_fiscalite_foyer
     OPENFISCA_UTILITY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     OPENFISCA_UTILITY_AVAILABLE = False
-
+    # Store the specific error for more informative messages
+    st.session_state.openfisca_import_error = str(e)
 
 # --- Fonctions de logique métier ---
 
@@ -264,7 +273,8 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         # 2. Appel à OpenFisca avec tous les revenus
         if OPENFISCA_UTILITY_AVAILABLE:
             est_parent_isole = len(parents) == 1
-            impot_brut = calculer_impot_openfisca(
+            # Utilisation de la nouvelle fonction d'analyse complète
+            resultats_fiscaux = analyser_fiscalite_foyer(
                 annee=annee,
                 parents=parents,
                 enfants=enfants_a_charge_annee,
@@ -272,8 +282,8 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
                 revenu_foncier_net=revenu_foncier_net_calcule,
                 est_parent_isole=est_parent_isole
             )
-            # On applique la réduction d'impôt après le calcul
-            impot = max(0, impot_brut - total_reduction_pinel_annee)
+            impot_brut = resultats_fiscaux.get('ir_net', 0)
+            impot = max(0, impot_brut - total_reduction_pinel_annee) # La réduction Pinel est appliquée après
         else:
             # Fallback si OpenFisca n'est pas disponible
             # On utilise le revenu foncier net calculé manuellement
@@ -603,7 +613,12 @@ def main():
 
     st.header("📈 Projection Financière Annuelle")
     if not OPENFISCA_UTILITY_AVAILABLE:
-        st.warning("Le module OpenFisca n'est pas installé. Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\nPour un calcul précis, veuillez installer le package `openfisca-france`.")
+        error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
+        st.warning(
+            "**Le module OpenFisca n'a pas pu être chargé.** Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\n"
+            f"**Erreur technique :** `{error_msg}`\n\n"
+            "Pour un calcul précis, assurez-vous que le package `openfisca-france` est bien installé dans votre environnement."
+        )
 
     if df_projection.empty:
         st.info("Aucune donnée de projection financière à afficher.")
