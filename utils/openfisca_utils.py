@@ -92,7 +92,7 @@ def analyser_fiscalite_foyer(annee, parents, enfants, revenus_annuels, revenu_fo
 
     # --- 4. Calcul des indicateurs ---
     ir_net = simulation.calculate('ip_net', period)
-    ps_foncier = 0#simulation.calculate('prelevements_sociaux_revenus_du_patrimoine', period)[0]
+    ps_foncier = revenu_foncier_net * .172#simulation.calculate('prelevements_sociaux_revenus_du_patrimoine', period)[0]
     tmi = simulation.calculate('ir_taux_marginal', period) * 100
     parts_fiscales = simulation.calculate('nbptr', period)
     revenu_brut_global = 0#simulation.calculate('revenu_brut_global', period)[0]
@@ -108,7 +108,7 @@ def analyser_fiscalite_foyer(annee, parents, enfants, revenus_annuels, revenu_fo
 
     return {
         'ir_net': float(ir_net),
-        'ps_foncier': 0, #float(ps_foncier),
+        'ps_foncier': float(ps_foncier),
         'total_imposition': 0, #float(total_imposition),
         'tmi': float(tmi),
         'parts_fiscales': float(parts_fiscales),

@@ -116,7 +116,7 @@ def display_tax_calculation_waterfall(results):
 
 def debug_fisca(results):
     st.header('input to OpenFisca')
-    st.json(results['simulation_data'], expanded=True)
+    st.json(results['simulation_data'], expanded=False)
 
 def main():
     st.title("🔎 Focus Fiscalité")
@@ -176,8 +176,8 @@ def main():
     display_summary(resultats_fiscaux)
     st.markdown("---")
     display_quotient_familial_analysis(resultats_fiscaux)
-    st.markdown("---")
-    display_tax_calculation_waterfall(resultats_fiscaux)
+    #st.markdown("---")
+    #display_tax_calculation_waterfall(resultats_fiscaux)
     st.markdown("---")
     debug_fisca(resultats_fiscaux)
 
