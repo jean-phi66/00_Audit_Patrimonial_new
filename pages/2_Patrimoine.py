@@ -69,7 +69,7 @@ def display_assets_ui():
                 actif['type'] = st.selectbox("Type d'actif", options=types_actifs, index=types_actifs.index(actif['type']) if actif['type'] in types_actifs else 0, key=f"actif_type_{i}")
                 actif['valeur'] = st.number_input("Valeur (€)", value=actif.get('valeur', 0.0), min_value=0.0, step=1000.0, format="%.2f", key=f"actif_valeur_{i}")
 
-                # Ajout des champs spécifiques à l'immobilier productif
+                # Ajout des champs spécifiques à l'immobilier
                 if actif['type'] == "Immobilier productif":
                     st.markdown("---")
                     actif['loyers_mensuels'] = st.number_input(
@@ -108,6 +108,15 @@ def display_assets_ui():
                             key=f"pinel_duree_{i}"
                         )
                         actif['annee_debut_dispositif'] = st.number_input("Année de début", min_value=2014, max_value=date.today().year, value=actif.get('annee_debut_dispositif', date.today().year - 1), key=f"pinel_annee_{i}")
+
+                elif actif['type'] == "Immobilier de jouissance":
+                    st.markdown("---")
+                    actif['taxe_fonciere'] = st.number_input(
+                        "Taxe foncière (€/an)",
+                        value=actif.get('taxe_fonciere', 0.0),
+                        min_value=0.0, step=50.0, format="%.2f",
+                        key=f"actif_taxe_{i}"
+                    )
 
             with button_col:
                 st.write("") # Espaceur

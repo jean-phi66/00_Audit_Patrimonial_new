@@ -423,7 +423,7 @@ def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
             
             event_annotations.append(
                 dict(x=event_date, y=y_pos, text=f"<b>{age_at_event} ans</b>", showarrow=False, 
-                     font=dict(color='black', size=10), bgcolor='rgba(255,255,255,0.6)',
+                     font=dict(color='black', size=14), bgcolor='rgba(255,255,255,0.9)',
                      xanchor='center', yanchor='bottom', yshift=5)
             )
 
@@ -431,11 +431,15 @@ def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
     end_date_chart = date(start_date_chart.year + duree_projection, 12, 31)
     fig.update_layout(
         title_text='Activités par membre du foyer au fil du temps',
-        xaxis_title='Année', yaxis_title='Membre du Foyer',
+        xaxis_title='Année',
         xaxis_range=[start_date_chart.strftime('%Y-%m-%d'), end_date_chart.strftime('%Y-%m-%d')],
         annotations=bar_annotations + event_annotations, 
         shapes=event_shapes,
-        showlegend=False
+        showlegend=False,
+        yaxis=dict(
+            title='Membre du Foyer',
+            tickfont=dict(size=14)
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -503,63 +507,75 @@ def display_projection_chart(df_projection):
     fig_bar.update_layout(barmode='stack', yaxis_title='Montant (€)', xaxis_title='Année', legend_title_text='Postes de dépenses et Reste à vivre')
     st.plotly_chart(fig_bar, use_container_width=True)
 
-def display_tax_accumulation_chart(df_projection, parents, settings):
-    """Affiche le graphique du cumul de la fiscalité avec les points de retraite."""
-    st.subheader("Graphique du cumul de la fiscalité")
-    #st.markdown("Ce graphique montre le cumul de l'impôt sur le revenu et des prélèvements sociaux au fil des ans, hors taxes foncières.")
+def display_annual_tax_chart(df_projection):
+    """Affiche le graphique de l'évolution de la fiscalité annuelle."""
+    st.subheader("Évolution de la fiscalité annuelle")
+    st.markdown("Ce graphique montre le montant de l'impôt sur le revenu et des prélèvements sociaux payés chaque année.")
 
-    # 1. Préparer les données
+    df_fiscalite = df_projection[['Année', 'Impôt sur le revenu', 'Prélèvements Sociaux']].copy()
+    
+    # Utiliser melt pour avoir un format long adapté à px.bar avec color
+    df_plot = df_fiscalite.melt(id_vars=['Année'], value_vars=['Impôt sur le revenu', 'Prélèvements Sociaux'],
+                                var_name='Type de fiscalité', value_name='Montant')
+
+    fig = px.bar(
+        df_plot,
+        x='Année',
+        y='Montant',
+        color='Type de fiscalité',
+        title="Fiscalité annuelle (Impôt sur le Revenu + Prélèvements Sociaux)",
+        labels={'Montant': 'Montant Annuel (€)'},
+        height=400,
+        barmode='stack',
+        color_discrete_map={
+            'Impôt sur le revenu': 'indianred',
+            'Prélèvements Sociaux': 'lightsalmon'
+        }
+    )
+    
+    fig.update_layout(
+        yaxis_title='Montant Annuel (€)',
+        xaxis_title='Année',
+        legend_title_text='Composants'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def display_cumulative_tax_at_retirement(df_projection, parents, settings):
+    """Affiche les métriques du cumul de la fiscalité au départ à la retraite."""
+    st.subheader("Cumul de la fiscalité au départ à la retraite")
+
     df_fiscalite = df_projection[['Année', 'Impôt sur le revenu', 'Prélèvements Sociaux']].copy()
     df_fiscalite['Fiscalité Annuelle'] = df_fiscalite['Impôt sur le revenu'] + df_fiscalite['Prélèvements Sociaux']
     df_fiscalite['Fiscalité Cumulée'] = df_fiscalite['Fiscalité Annuelle'].cumsum()
 
-    # 2. Trouver les points de retraite
-    retirement_points = []
-    for parent in parents:
-        prenom = parent.get('prenom')
-        dob = parent.get('date_naissance')
-        if prenom and dob and prenom in settings:
-            age_retraite = settings[prenom]['retraite']
-            annee_retraite = dob.year + age_retraite
-            
-            # Trouver les données pour cette année
-            retirement_data = df_fiscalite[df_fiscalite['Année'] == annee_retraite]
-            if not retirement_data.empty:
-                point = {
-                    'Année': annee_retraite,
-                    'Fiscalité Cumulée': retirement_data.iloc[0]['Fiscalité Cumulée'],
-                    'Label': f"Retraite {prenom}"
-                }
-                retirement_points.append(point)
+    if not parents:
+        st.info("Aucun parent renseigné pour calculer le cumul.")
+        return
 
-    df_retirement_points = pd.DataFrame(retirement_points)
+    cols = st.columns(len(parents))
+    for i, parent in enumerate(parents):
+        with cols[i]:
+            prenom = parent.get('prenom')
+            dob = parent.get('date_naissance')
+            if prenom and dob and prenom in settings:
+                age_retraite = settings[prenom]['retraite']
+                annee_retraite = dob.year + age_retraite
 
-    # 3. Créer le graphique en aire
-    fig_cumul = px.area(
-        df_fiscalite, x='Année', y='Fiscalité Cumulée',
-        title="Évolution du total des impôts et prélèvements sociaux payés",
-        labels={'Fiscalité Cumulée': 'Total de la fiscalité cumulée (€)'},
-        hover_data={'Fiscalité Annuelle': ':,.0f €'}
-    )
-    fig_cumul.update_traces(line=dict(color='indianred'))
-
-    # Ajouter les marqueurs pour les départs en retraite
-    if not df_retirement_points.empty:
-        # Créer les étiquettes de texte qui incluent le montant pour l'affichage sur le graphique
-        text_labels = df_retirement_points.apply(
-            lambda row: f"{row['Label']}<br><b>{row['Fiscalité Cumulée']:,.0f} €</b>",
-            axis=1
-        )
-        fig_cumul.add_scatter(
-            x=df_retirement_points['Année'], y=df_retirement_points['Fiscalité Cumulée'],
-            mode='markers+text', marker=dict(symbol='star', size=12, color='gold', line=dict(width=1, color='black')),
-            text=text_labels, textposition="top center", name='Départs en retraite',
-            hovertemplate="<b>%{customdata[0]}</b><br>Année: %{x}<br>Cumul: %{y:,.0f} €<extra></extra>",
-            customdata=df_retirement_points[['Label']]
-        )
-
-    fig_cumul.update_layout(showlegend=False)
-    st.plotly_chart(fig_cumul, use_container_width=True)
+                # Trouver le cumul pour cette année-là
+                cumul_data = df_fiscalite[df_fiscalite['Année'] == annee_retraite]
+                if not cumul_data.empty:
+                    cumul_a_retraite = cumul_data.iloc[0]['Fiscalité Cumulée']
+                    st.metric(
+                        label=f"Total impôts payés à la retraite de {prenom} ({annee_retraite})",
+                        value=f"{cumul_a_retraite:,.0f} €",
+                        help="Cumul de l'IR et des PS payés depuis le début de la projection jusqu'à l'année de départ à la retraite incluse."
+                    )
+                else:
+                    st.metric(
+                        label=f"Total impôts payés à la retraite de {prenom} ({annee_retraite})",
+                        value="N/A",
+                        help=f"L'année de retraite ({annee_retraite}) est en dehors de la période de projection."
+                    )
 
 # --- Exécution Principale ---
 
@@ -595,7 +611,12 @@ def main():
         with st.expander("Détails de la projection financière"):
             display_projection_table(df_projection)
         display_projection_chart(df_projection)
-        display_tax_accumulation_chart(df_projection, parents, settings)
+
+        # Nouveaux graphiques et métriques pour la fiscalité
+        st.markdown("---")
+        st.header("🔎 Focus Fiscalité")
+        display_annual_tax_chart(df_projection)
+        display_cumulative_tax_at_retirement(df_projection, parents, settings)
 
 if __name__ == "__main__":
     main()

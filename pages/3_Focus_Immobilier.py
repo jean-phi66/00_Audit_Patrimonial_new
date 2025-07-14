@@ -96,7 +96,7 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
                 label="Effort d'épargne mensuel",
                 value=f"{metrics['savings_effort']:,.2f} €",
                 delta=f"{metrics['savings_effort']:,.2f}",
-                delta_color="inverse",
+                #delta_color="inverse",
                 help="Flux de trésorerie mensuel après paiement des charges, de la taxe foncière, du crédit et des impôts. Un nombre négatif représente l'effort d'épargne à réaliser."
             )
         
@@ -126,14 +126,14 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
             textposition = "outside",
             text = [
                 f"{metrics['loyers_annuels']:,.0f} €", f"{-metrics['charges_annuelles']:,.0f} €", f"{-metrics['taxe_fonciere']:,.0f} €",
-                f"{metrics['loyers_nets_de_charges']:,.0f}",
+                f"{metrics['loyers_nets_de_charges']:,.0f} €",
                 f"{-metrics['interets_annuels']:,.0f} €",
-                f"{metrics['revenus_fonciers_nets']:,.0f}",
+                f"{metrics['revenus_fonciers_nets']:,.0f} €",
                 f"{-metrics['tax_info']['ir']:,.0f} €", f"{-metrics['tax_info']['ps']:,.0f} €",
                 f"+{metrics['reduction_pinel']:,.0f} €" if metrics['reduction_pinel'] > 0 else "0 €",
-                f"{metrics['resultat_avant_remboursement_capital']:,.0f}",
+                f"{metrics['resultat_avant_remboursement_capital']:,.0f} €",
                 f"{-metrics['capital_rembourse_annuel']:,.0f} €",
-                f"{metrics['cash_flow_annuel']:,.0f}"
+                f"{metrics['cash_flow_annuel']:,.0f} €"
             ],
             y = [
                 metrics['loyers_annuels'], -metrics['charges_annuelles'], -metrics['taxe_fonciere'], 
@@ -146,12 +146,37 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
                 None # Total final
             ],
             connector = {"line":{"color":"rgb(63, 63, 63)"}},
+            textfont=dict(
+                size=16,
+            ),
         ))
+
+        # Calculer les limites de l'axe Y pour assurer la visibilité des labels
+        all_totals = [
+            metrics['loyers_annuels'],
+            metrics['loyers_nets_de_charges'],
+            metrics['revenus_fonciers_nets'],
+            metrics['resultat_avant_remboursement_capital'],
+            metrics['cash_flow_annuel']
+        ]
+        
+        # On inclut 0 dans le calcul pour gérer le cas où tous les totaux sont positifs ou négatifs
+        max_y = max(0, *all_totals)
+        min_y = min(0, *all_totals)
+
+        # Ajouter un padding pour que les textes "outside" soient visibles
+        # On prend 10% de l'amplitude totale comme marge en haut et en bas
+        y_padding = (max_y - min_y) * 0.1
+        if y_padding == 0: # Cas où toutes les valeurs sont nulles
+            y_padding = 1000 # Une valeur par défaut pour créer un peu d'espace
 
         fig.update_layout(
                 title="Décomposition du Cash-flow Annuel",
                 showlegend=False,
-                yaxis_title="Montant (€)"
+                yaxis_title="Montant (€)",
+                title_font_size=18,
+                xaxis_tickfont_size=16,
+                yaxis_range=[min_y - y_padding, max_y + y_padding]
         )
         st.plotly_chart(fig, use_container_width=True)
 

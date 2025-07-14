@@ -66,16 +66,22 @@ def sync_all_flux_data():
     sync_salaires(auto_revenus) # Modifie la liste auto_revenus directement
 
     # --- 3. Synchronisation avec le patrimoine ---
-    # Actifs productifs -> Revenus (loyers) et Dépenses (charges, taxe)
+    # Actifs immobiliers -> Revenus (loyers) et Dépenses (charges, taxe)
     for asset in st.session_state.get('actifs', []):
-        if asset.get('type') == 'Immobilier productif':
-            asset_id = asset['id']
+        asset_id = asset['id']
+        asset_type = asset.get('type')
+
+        # Traitement commun à tous les biens immobiliers (taxe foncière)
+        if asset_type in ['Immobilier productif', 'Immobilier de jouissance']:
+            if asset.get('taxe_fonciere', 0.0) > 0:
+                auto_depenses.append({'id': f"taxe_{asset_id}", 'libelle': f"Taxe Foncière de '{asset.get('libelle', 'N/A')}'", 'montant': asset['taxe_fonciere'] / 12, 'categorie': 'Impôts et taxes', 'source_id': asset_id})
+
+        # Traitement spécifique aux biens productifs (loyers, charges)
+        if asset_type == 'Immobilier productif':
             if asset.get('loyers_mensuels', 0.0) > 0:
                 auto_revenus.append({'id': f"revenu_{asset_id}", 'libelle': f"Loyers de '{asset.get('libelle', 'N/A')}'", 'montant': asset['loyers_mensuels'], 'type': 'Patrimoine', 'source_id': asset_id})
             if asset.get('charges', 0.0) > 0:
                 auto_depenses.append({'id': f"charges_{asset_id}", 'libelle': f"Charges de '{asset.get('libelle', 'N/A')}'", 'montant': asset['charges'], 'categorie': 'Logement', 'source_id': asset_id})
-            if asset.get('taxe_fonciere', 0.0) > 0:
-                auto_depenses.append({'id': f"taxe_{asset_id}", 'libelle': f"Taxe Foncière de '{asset.get('libelle', 'N/A')}'", 'montant': asset['taxe_fonciere'] / 12, 'categorie': 'Impôts et taxes', 'source_id': asset_id})
 
     # Passifs (prêts) -> Dépenses (mensualités)
     for passif in st.session_state.get('passifs', []):
