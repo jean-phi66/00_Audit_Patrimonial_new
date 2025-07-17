@@ -302,57 +302,54 @@ def display_projection_charts(df_projection, projection_duration):
         st.plotly_chart(fig_leverage, use_container_width=True)
         st.caption("L'effet de levier est calculé uniquement lorsque le cash-flow est négatif (effort d'épargne positif). Un ratio de 2 signifie que pour 1€ d'effort, 2€ de capital sont créés.")
 
-def main():
-    """Fonction principale pour exécuter la page Focus Immobilier."""
-    st.title("🔎 Focus Immobilier")
-    st.markdown("Analysez en détail la performance de vos investissements immobiliers locatifs.")
+"""Fonction principale pour exécuter la page Focus Immobilier."""
+st.title("🔎 Focus Immobilier")
+st.markdown("Analysez en détail la performance de vos investissements immobiliers locatifs.")
 
-    # --- Vérification des données ---
-    if 'actifs' not in st.session_state or not st.session_state.actifs:
-        st.warning("⚠️ Veuillez d'abord renseigner vos actifs dans la page **2_Patrimoine**.")
-        st.stop()
+# --- Vérification des données ---
+if 'actifs' not in st.session_state or not st.session_state.actifs:
+    st.warning("⚠️ Veuillez d'abord renseigner vos actifs dans la page **2_Patrimoine**.")
+    st.stop()
 
-    productive_assets = [a for a in st.session_state.actifs if a.get('type') == "Immobilier productif"]
+productive_assets = [a for a in st.session_state.actifs if a.get('type') == "Immobilier productif"]
 
-    if not productive_assets:
-        st.info("Vous n'avez pas d'actif de type 'Immobilier productif' à analyser.")
-        st.stop()
+if not productive_assets:
+    st.info("Vous n'avez pas d'actif de type 'Immobilier productif' à analyser.")
+    st.stop()
 
-    # --- Paramètres de simulation ---
-    st.sidebar.header("Hypothèses de calcul")
-    # Initialisation dans le session_state pour les rendre accessibles au rapport
-    if 'immo_tmi' not in st.session_state:
-        st.session_state.immo_tmi = 30
-    if 'immo_projection_duration' not in st.session_state:
-        st.session_state.immo_projection_duration = 15
+# --- Paramètres de simulation ---
+st.sidebar.header("Hypothèses de calcul")
+# Initialisation dans le session_state pour les rendre accessibles au rapport
+if 'immo_tmi' not in st.session_state:
+    st.session_state.immo_tmi = 30
+if 'immo_projection_duration' not in st.session_state:
+    st.session_state.immo_projection_duration = 15
 
-    st.session_state.immo_tmi = st.sidebar.select_slider(
-        "Votre Taux Marginal d'Imposition (TMI)",
-        options=[0, 11, 30, 41, 45],
-        value=st.session_state.immo_tmi,
-        help="Le TMI est le taux d'imposition qui s'applique à la dernière tranche de vos revenus. Il est essentiel pour calculer l'impôt sur les revenus fonciers."
-    )
-    social_tax = 17.2 # Taux des prélèvements sociaux
-    st.sidebar.info(f"Les prélèvements sociaux sont fixés à **{social_tax}%**.")
+st.session_state.immo_tmi = st.sidebar.select_slider(
+    "Votre Taux Marginal d'Imposition (TMI)",
+    options=[0, 11, 30, 41, 45],
+    value=st.session_state.immo_tmi,
+    help="Le TMI est le taux d'imposition qui s'applique à la dernière tranche de vos revenus. Il est essentiel pour calculer l'impôt sur les revenus fonciers."
+)
+social_tax = 17.2 # Taux des prélèvements sociaux
+st.sidebar.info(f"Les prélèvements sociaux sont fixés à **{social_tax}%**.")
 
-    st.sidebar.markdown("---")
-    st.sidebar.header("Paramètres de Projection")
-    st.session_state.immo_projection_duration = st.sidebar.number_input(
-        "Durée de la projection (ans)",
-        min_value=1, max_value=40, value=st.session_state.immo_projection_duration, step=1
-    )
+st.sidebar.markdown("---")
+st.sidebar.header("Paramètres de Projection")
+st.session_state.immo_projection_duration = st.sidebar.number_input(
+    "Durée de la projection (ans)",
+    min_value=1, max_value=40, value=st.session_state.immo_projection_duration, step=1
+)
 
-    st.markdown("---")
+st.markdown("---")
 
-    # --- Affichage par bien ---
-    passifs = st.session_state.get('passifs', [])
-    for asset in productive_assets:
-        # Vérifier que les données nécessaires sont présentes
-        if asset.get('loyers_mensuels') is not None:
-            metrics = calculate_property_metrics(asset, passifs, st.session_state.immo_tmi, social_tax)
-            display_property_analysis(asset, metrics, passifs, st.session_state.immo_tmi, social_tax, st.session_state.immo_projection_duration)
-        else:
-            st.warning(f"Les données de loyers pour **{asset.get('libelle')}** ne sont pas renseignées dans la page Patrimoine.")
+# --- Affichage par bien ---
+passifs = st.session_state.get('passifs', [])
+for asset in productive_assets:
+    # Vérifier que les données nécessaires sont présentes
+    if asset.get('loyers_mensuels') is not None:
+        metrics = calculate_property_metrics(asset, passifs, st.session_state.immo_tmi, social_tax)
+        display_property_analysis(asset, metrics, passifs, st.session_state.immo_tmi, social_tax, st.session_state.immo_projection_duration)
+    else:
+        st.warning(f"Les données de loyers pour **{asset.get('libelle')}** ne sont pas renseignées dans la page Patrimoine.")
 
-if __name__ == "__main__":
-    main()

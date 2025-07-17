@@ -1,4 +1,5 @@
 import streamlit as st
+from collections import OrderedDict
 
 # Configuration de la page principale
 st.set_page_config(
@@ -33,29 +34,50 @@ if 'revenus' not in st.session_state:
 if 'depenses' not in st.session_state:
     st.session_state.depenses = []
 
+# --- Configuration des pages et de leur ordre ---
 
-# Page d'accueil
-st.title("Outil d'Audit Patrimonial 💰")
+page_config = OrderedDict({
+    "Accueil": None,  # Page d'accueil, pas besoin de fichier dédié
+    "👪 Foyer": {
+        "1_Famille": "Composition du foyer",
+    },
+    "🏛️ Patrimoine": {
+        "2_Patrimoine": "Détail du patrimoine",
+    },
+    "💸 Flux": {
+        "4_Flux": "Flux mensuels (revenus & dépenses)",
+    },
+    "🔎 Analyse": {
+        "7_Capacite_Endettement": "Capacité d'endettement",
+        "4_Projection": "Projection des grandes étapes de vie",
+        "3_Focus_Immobilier": "Focus immobilier locatif",
+        "8_Focus_Fiscalite": "Focus fiscalité",
+    },
+    "📄 Rapport": {
+        "6_Rapport": "Génération de rapport PDF",
+    },
+    "🛠️ Outils": {
+        "5_Sauvegarde_et_Chargement": "Sauvegarde et chargement des données",
+        "99_Debug": "Debug - Session State",
+    },
+})
 
-st.markdown("""
-Bienvenue dans votre assistant d'audit patrimonial.
 
-Cette application vous permettra de :
-1.  **Définir la composition de votre foyer** (parents et enfants).
-2.  **Détailler votre patrimoine** (actifs et passifs).
-3.  (Prochainement) **Projeter vos flux financiers** et anticiper les événements clés de votre vie.
+accueil_page = st.Page("pages/0_Accueil.py", title="👋🏽 Accueil")#, icon=":material/home:")
+load_save_page = st.Page("pages/5_Sauvegarde_et_Chargement.py", title="💾 Sauvegarde et chargement")#, icon=":material/save:")
 
-**👈 Utilisez le menu de navigation sur la gauche pour commencer.**
+famille_page = st.Page("pages/1_Famille.py", title="🧑‍🧑‍🧒‍🧒 Composition du foyer")#, icon=":material/group:")#, icon=":material/add_circle:")
+patrimoine_page = st.Page("pages/2_Patrimoine.py", title="💰 Description du patrimoine")#, icon=":material/attach_money:")
+flux_page = st.Page("pages/4_Flux.py", title="💸  Flux : revenus & dépenses")#, icon=":material/monetization_on:")
 
----
-*Cette application utilisera à terme [OpenFisca-France](https://github.com/openfisca/openfisca-france) pour des calculs de fiscalité précis.*
-""")
+immobilier_page = st.Page("pages/3_Focus_Immobilier.py", title="🏘️ Focus Immobilier")#, icon=":material/house:")
+fiscalite_page = st.Page("pages/8_Focus_Fiscalite.py", title="🧐Focus Fiscalité")#, icon=":material/monetization_on:")
+projection_page = st.Page("pages/4_Projection.py", title="📈 Projection")#, icon=":material/calendar_today:")
+#create_page = st.Page("pages/3_Flux.py", title="Delete entry", icon=":material/delete:")
 
-# Afficher les données actuelles (utile pour le débogage)
-with st.expander("Voir les données en cours (pour le développement)"):
-    st.write("### Données du Foyer :")
-    st.json(st.session_state.parents)
-    st.json(st.session_state.enfants)
-    st.write("### Données du Patrimoine :")
-    st.json(st.session_state.actifs)
-    st.json(st.session_state.passifs)
+pg = st.navigation({'Fichier':[accueil_page,  load_save_page],
+                   'Informations du Foyer': [famille_page, patrimoine_page, flux_page],
+                   'Analyse': [immobilier_page, fiscalite_page],
+                   'Projection': [projection_page]})
+#st.set_page_config(page_title="Data manager", page_icon=":material/edit:")
+pg.run()

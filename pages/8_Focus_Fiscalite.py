@@ -118,68 +118,66 @@ def debug_fisca(results):
     st.header('input to OpenFisca')
     st.json(results['simulation_data'], expanded=False)
 
-def main():
-    st.title("🔎 Focus Fiscalité")
-    st.markdown("Analysez en détail l'imposition sur le revenu de votre foyer pour l'année en cours.")
+#def main():
+st.title("🔎 Focus Fiscalité")
+st.markdown("Analysez en détail l'imposition sur le revenu de votre foyer pour l'année en cours.")
 
-    # --- Vérifications initiales ---
-    if not OPENFISCA_UTILITY_AVAILABLE:
-        error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
-        st.error(
-            "**Le module OpenFisca n'a pas pu être chargé.** L'analyse fiscale ne peut pas être effectuée.\n\n"
-            f"**Erreur technique :** `{error_msg}`\n\n"
-            "Veuillez vous assurer que le package `openfisca-france` est bien installé dans votre environnement Python."
-        )
-        st.stop()
-
-    if 'parents' not in st.session_state or not st.session_state.parents:
-        st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
-        st.stop()
-
-    # --- Préparation des données ---
-    parents = st.session_state.get('parents', [])
-    enfants = st.session_state.get('enfants', [])
-    revenus_salaires, revenu_foncier_net = get_revenus_imposables()
-
-    if not revenus_salaires:
-        st.warning("⚠️ Veuillez renseigner les salaires dans la page **4_Flux** pour lancer l'analyse.")
-        st.stop()
-
-    # --- Paramètres de simulation ---
-    st.sidebar.header("Paramètres de l'analyse")
-    annee_simulation = st.sidebar.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year)
-    
-    # Détection automatique du parent isolé, avec possibilité de forcer
-    is_single_parent_auto = len(parents) == 1 and len(enfants) > 0
-    est_parent_isole = st.sidebar.checkbox(
-        "Cocher la case T (Parent isolé)", 
-        value=is_single_parent_auto,
-        help="Cochez cette case si vous êtes célibataire, divorcé(e), séparé(e) ou veuf(ve) et que vous vivez seul(e) avec vos enfants à charge."
+# --- Vérifications initiales ---
+if not OPENFISCA_UTILITY_AVAILABLE:
+    error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
+    st.error(
+        "**Le module OpenFisca n'a pas pu être chargé.** L'analyse fiscale ne peut pas être effectuée.\n\n"
+        f"**Erreur technique :** `{error_msg}`\n\n"
+        "Veuillez vous assurer que le package `openfisca-france` est bien installé dans votre environnement Python."
     )
+    st.stop()
 
-    # --- Lancement de l'analyse ---
-    with st.spinner("Analyse de la fiscalité en cours avec OpenFisca..."):
-        try:
-            resultats_fiscaux = analyser_fiscalite_foyer(
-                annee=annee_simulation,
-                parents=parents,
-                enfants=enfants,
-                revenus_annuels=revenus_salaires,
-                revenu_foncier_net=revenu_foncier_net,
-                est_parent_isole=est_parent_isole
-            )
-        except Exception as e:
-            st.error(f"Une erreur est survenue lors du calcul avec OpenFisca : {e}")
-            st.stop()
+if 'parents' not in st.session_state or not st.session_state.parents:
+    st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
+    st.stop()
 
-    # --- Affichage des résultats ---
-    display_summary(resultats_fiscaux)
-    st.markdown("---")
-    display_quotient_familial_analysis(resultats_fiscaux)
-    #st.markdown("---")
-    #display_tax_calculation_waterfall(resultats_fiscaux)
-    st.markdown("---")
-    debug_fisca(resultats_fiscaux)
+# --- Préparation des données ---
+parents = st.session_state.get('parents', [])
+enfants = st.session_state.get('enfants', [])
+revenus_salaires, revenu_foncier_net = get_revenus_imposables()
 
-if __name__ == "__main__":
-    main()
+if not revenus_salaires:
+    st.warning("⚠️ Veuillez renseigner les salaires dans la page **4_Flux** pour lancer l'analyse.")
+    st.stop()
+
+# --- Paramètres de simulation ---
+st.sidebar.header("Paramètres de l'analyse")
+annee_simulation = st.sidebar.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year)
+
+# Détection automatique du parent isolé, avec possibilité de forcer
+is_single_parent_auto = len(parents) == 1 and len(enfants) > 0
+est_parent_isole = st.sidebar.checkbox(
+    "Cocher la case T (Parent isolé)", 
+    value=is_single_parent_auto,
+    help="Cochez cette case si vous êtes célibataire, divorcé(e), séparé(e) ou veuf(ve) et que vous vivez seul(e) avec vos enfants à charge."
+)
+
+# --- Lancement de l'analyse ---
+with st.spinner("Analyse de la fiscalité en cours avec OpenFisca..."):
+    try:
+        resultats_fiscaux = analyser_fiscalite_foyer(
+            annee=annee_simulation,
+            parents=parents,
+            enfants=enfants,
+            revenus_annuels=revenus_salaires,
+            revenu_foncier_net=revenu_foncier_net,
+            est_parent_isole=est_parent_isole
+        )
+    except Exception as e:
+        st.error(f"Une erreur est survenue lors du calcul avec OpenFisca : {e}")
+        st.stop()
+
+# --- Affichage des résultats ---
+display_summary(resultats_fiscaux)
+st.markdown("---")
+display_quotient_familial_analysis(resultats_fiscaux)
+#st.markdown("---")
+#display_tax_calculation_waterfall(resultats_fiscaux)
+st.markdown("---")
+debug_fisca(resultats_fiscaux)
+

@@ -589,49 +589,46 @@ def display_cumulative_tax_at_retirement(df_projection, parents, settings):
 
 # --- Exécution Principale ---
 
-def main():
-    """Fonction principale pour exécuter la page de projection."""
-    st.title("🗓️ Projection des grandes étapes de vie")
-    st.markdown("Définissez les âges clés pour chaque membre du foyer afin de visualiser une frise chronologique de leurs activités.")
+"""Fonction principale pour exécuter la page de projection."""
+st.title("🗓️ Projection des grandes étapes de vie")
+st.markdown("Définissez les âges clés pour chaque membre du foyer afin de visualiser une frise chronologique de leurs activités.")
 
-    if 'parents' not in st.session_state or not st.session_state.parents or not st.session_state.parents[0].get('prenom'):
-        st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
-        st.stop()
+if 'parents' not in st.session_state or not st.session_state.parents or not st.session_state.parents[0].get('prenom'):
+    st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
+    st.stop()
 
-    if 'projection_settings' not in st.session_state:
-        st.session_state.projection_settings = {}
+if 'projection_settings' not in st.session_state:
+    st.session_state.projection_settings = {}
 
-    parents = st.session_state.parents
-    enfants = st.session_state.enfants
+parents = st.session_state.parents
+enfants = st.session_state.enfants
 
-    duree_projection, settings = display_settings_ui(parents, enfants)
+duree_projection, settings = display_settings_ui(parents, enfants)
 
-    gantt_data = generate_gantt_data(parents, enfants, settings, duree_projection)
-    display_gantt_chart(gantt_data, duree_projection, parents, enfants)
+gantt_data = generate_gantt_data(parents, enfants, settings, duree_projection)
+display_gantt_chart(gantt_data, duree_projection, parents, enfants)
 
-    df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
+df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
 
-    st.header("📈 Projection Financière Annuelle")
-    if not OPENFISCA_UTILITY_AVAILABLE:
-        error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
-        st.warning(
-            "**Le module OpenFisca n'a pas pu être chargé.** Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\n"
-            f"**Erreur technique :** `{error_msg}`\n\n"
-            "Pour un calcul précis, assurez-vous que le package `openfisca-france` est bien installé dans votre environnement."
-        )
+st.header("📈 Projection Financière Annuelle")
+if not OPENFISCA_UTILITY_AVAILABLE:
+    error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
+    st.warning(
+        "**Le module OpenFisca n'a pas pu être chargé.** Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\n"
+        f"**Erreur technique :** `{error_msg}`\n\n"
+        "Pour un calcul précis, assurez-vous que le package `openfisca-france` est bien installé dans votre environnement."
+    )
 
-    if df_projection.empty:
-        st.info("Aucune donnée de projection financière à afficher.")
-    else:
-        with st.expander("Détails de la projection financière"):
-            display_projection_table(df_projection)
-        display_projection_chart(df_projection)
+if df_projection.empty:
+    st.info("Aucune donnée de projection financière à afficher.")
+else:
+    with st.expander("Détails de la projection financière"):
+        display_projection_table(df_projection)
+    display_projection_chart(df_projection)
 
-        # Nouveaux graphiques et métriques pour la fiscalité
-        st.markdown("---")
-        st.header("🔎 Focus Fiscalité")
-        display_annual_tax_chart(df_projection)
-        display_cumulative_tax_at_retirement(df_projection, parents, settings)
+    # Nouveaux graphiques et métriques pour la fiscalité
+    st.markdown("---")
+    st.header("🔎 Focus Fiscalité")
+    display_annual_tax_chart(df_projection)
+    display_cumulative_tax_at_retirement(df_projection, parents, settings)
 
-if __name__ == "__main__":
-    main()
