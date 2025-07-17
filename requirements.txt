@@ -1,5 +1,7 @@
+fpdf2==2.7.9
+numpy
 openfisca_core==43.3.7
 openfisca_france==172.0.5
-pandas==2.3.0
+pandas==2.3.1
 plotly==6.0.1
 streamlit==1.41.1
