@@ -43,43 +43,41 @@ def load_data_into_session(data):
     st.session_state.depenses = data.get('depenses', [])
 
 
-def main():
-    st.title("💾 Sauvegarde et Chargement")
-    st.markdown("Utilisez cette page pour sauvegarder l'ensemble de vos données dans un fichier, ou pour recharger une session de travail précédente.")
+#def main():
+st.title("💾 Sauvegarde et Chargement")
+st.markdown("Utilisez cette page pour sauvegarder l'ensemble de vos données dans un fichier, ou pour recharger une session de travail précédente.")
 
-    # --- Section Sauvegarde ---
-    st.header("⬇️ Sauvegarder mes données")
-    st.markdown("Cliquez sur le bouton ci-dessous pour télécharger un fichier `patrimoine_data.json` contenant toutes les informations que vous avez saisies.")
+# --- Section Sauvegarde ---
+st.header("⬇️ Sauvegarder mes données")
+st.markdown("Cliquez sur le bouton ci-dessous pour télécharger un fichier `patrimoine_data.json` contenant toutes les informations que vous avez saisies.")
 
+try:
+    data_to_save = get_data_to_save()
+    json_data = json.dumps(data_to_save, cls=CustomJSONEncoder, indent=4, ensure_ascii=False)
+    
+    st.download_button(
+        label="Télécharger le fichier de sauvegarde",
+        data=json_data,
+        file_name="patrimoine_data.json",
+        mime="application/json",
+        use_container_width=True
+    )
+except Exception as e:
+    st.error(f"Une erreur est survenue lors de la préparation des données pour la sauvegarde : {e}")
+
+# --- Section Chargement ---
+st.header("⬆️ Charger des données")
+st.warning("Attention, le chargement d'un fichier écrasera toutes les données actuellement saisies.")
+
+uploaded_file = st.file_uploader("Choisissez un fichier de sauvegarde", type="json")
+
+if uploaded_file is not None:
     try:
-        data_to_save = get_data_to_save()
-        json_data = json.dumps(data_to_save, cls=CustomJSONEncoder, indent=4, ensure_ascii=False)
-        
-        st.download_button(
-            label="Télécharger le fichier de sauvegarde",
-            data=json_data,
-            file_name="patrimoine_data.json",
-            mime="application/json",
-            use_container_width=True
-        )
+        file_content = uploaded_file.getvalue().decode("utf-8")
+        loaded_data = json.loads(file_content, object_hook=json_decoder_hook)
+        load_data_into_session(loaded_data)
+        st.success("✅ Données chargées avec succès ! L'application va s'actualiser.")
+        st.rerun()
     except Exception as e:
-        st.error(f"Une erreur est survenue lors de la préparation des données pour la sauvegarde : {e}")
+        st.error(f"❌ Erreur lors du chargement du fichier : {e}")
 
-    # --- Section Chargement ---
-    st.header("⬆️ Charger des données")
-    st.warning("Attention, le chargement d'un fichier écrasera toutes les données actuellement saisies.")
-
-    uploaded_file = st.file_uploader("Choisissez un fichier de sauvegarde", type="json")
-
-    if uploaded_file is not None:
-        try:
-            file_content = uploaded_file.getvalue().decode("utf-8")
-            loaded_data = json.loads(file_content, object_hook=json_decoder_hook)
-            load_data_into_session(loaded_data)
-            st.success("✅ Données chargées avec succès ! L'application va s'actualiser.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ Erreur lors du chargement du fichier : {e}")
-
-if __name__ == "__main__":
-    main()

@@ -325,21 +325,21 @@ def create_patrimoine_ideal_donut(color_map):
     return fig
 # --- Exécution Principale ---
 
-def main():
-    """Fonction principale pour exécuter la page Patrimoine."""
-    st.title("🏡 Description du Patrimoine")
-    st.markdown("Listez ici vos actifs (ce que vous possédez) et vos passifs (ce que vous devez).")
+#def main():
+"""Fonction principale pour exécuter la page Patrimoine."""
+st.title("🏡 Description du Patrimoine")
+st.markdown("Listez ici vos actifs (ce que vous possédez) et vos passifs (ce que vous devez).")
 
-    initialize_session_state()
-    run_data_migrations()
+initialize_session_state()
+run_data_migrations()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        display_assets_ui()
-    with col2:
-        display_liabilities_ui()
+col1, col2 = st.columns(2)
+with col1:
+    display_assets_ui()
+with col2:
+    display_liabilities_ui()
 
-    display_summary_and_charts()
+display_summary_and_charts()
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()

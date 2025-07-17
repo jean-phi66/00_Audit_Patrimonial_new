@@ -424,23 +424,20 @@ def display_income_comparison_ui(total_revenus_mensuels, depenses, capacite_epar
 
 # --- Exécution Principale ---
 
-def main():
-    st.title("🌊 Flux Mensuels (Revenus & Dépenses)")
-    st.markdown("Renseignez ici vos revenus et vos dépenses mensuelles pour calculer votre capacité d'épargne.")
+st.title("🌊 Flux Mensuels (Revenus & Dépenses)")
+st.markdown("Renseignez ici vos revenus et vos dépenses mensuelles pour calculer votre capacité d'épargne.")
 
-    if 'parents' not in st.session_state or not st.session_state.parents or not st.session_state.parents[0].get('prenom'):
-        st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
-        st.stop()
+if 'parents' not in st.session_state or not st.session_state.parents or not st.session_state.parents[0].get('prenom'):
+    st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
+    st.stop()
 
-    sync_all_flux_data()
+sync_all_flux_data()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        display_revenus_ui()
-    with col2:
-        display_depenses_ui()
+col1, col2 = st.columns(2)
+with col1:
+    display_revenus_ui()
+with col2:
+    display_depenses_ui()
 
-    display_summary()
+display_summary()
 
-if __name__ == "__main__":
-    main()
