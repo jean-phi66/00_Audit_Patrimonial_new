@@ -13,18 +13,18 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from core.patrimoine_logic import get_patrimoine_df, find_associated_loan, calculate_crd
+from core.patrimoine_logic import get_patrimoine_df, find_associated_loans
+from core.charts import (
+    create_patrimoine_brut_treemap,
+    create_patrimoine_net_treemap,
+    create_patrimoine_net_donut
+)
 
 # Importation dynamique des modules de page car leurs noms commencent par des chiffres
 focus_immo_module = importlib.import_module("pages.3_Focus_Immobilier")
 generate_projection_data = focus_immo_module.generate_projection_data
 create_cash_flow_projection_fig = focus_immo_module.create_cash_flow_projection_fig
 create_leverage_projection_fig = focus_immo_module.create_leverage_projection_fig
-
-patrimoine_module = importlib.import_module("pages.2_Patrimoine")
-create_patrimoine_brut_treemap = patrimoine_module.create_patrimoine_brut_treemap
-create_patrimoine_net_treemap = patrimoine_module.create_patrimoine_net_treemap
-create_patrimoine_net_donut = patrimoine_module.create_patrimoine_net_donut
 
 try:
     from fpdf import FPDF
@@ -274,8 +274,8 @@ def add_immo_focus_section(pdf, actifs, passifs):
         pdf.cell(0, 10, f"Analyse de : {asset.get('libelle', 'Sans nom')}", 0, 1, 'L')
         pdf.ln(2)
 
-        loan = find_associated_loan(asset.get('id'), passifs)
-        df_projection = generate_projection_data(asset, loan, tmi, social_tax, projection_duration)
+        loans = find_associated_loans(asset.get('id'), passifs)
+        df_projection = generate_projection_data(asset, loans, tmi, social_tax, projection_duration)
 
         if df_projection.empty:
             pdf.chapter_body("Pas de données de projection à afficher pour ce bien.")

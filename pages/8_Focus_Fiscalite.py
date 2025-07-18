@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 
-from core.patrimoine_logic import find_associated_loan, calculate_loan_annual_breakdown
+from core.patrimoine_logic import find_associated_loans, calculate_loan_annual_breakdown
 
 try:
     from utils.openfisca_utils import analyser_fiscalite_foyer
@@ -40,8 +40,8 @@ def get_revenus_imposables():
         charges_annuelles = asset.get('charges', 0) * 12
         taxe_fonciere = asset.get('taxe_fonciere', 0)
         
-        loan = find_associated_loan(asset.get('id'), passifs)
-        interets_emprunt = calculate_loan_annual_breakdown(loan, year=date.today().year).get('interest', 0)
+        loans = find_associated_loans(asset.get('id'), passifs)
+        interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=date.today().year).get('interest', 0) for l in loans)
 
         charges_deductibles_asset = charges_annuelles + taxe_fonciere + interets_emprunt
         total_loyers_bruts_annee += loyers_annuels
@@ -180,4 +180,3 @@ display_quotient_familial_analysis(resultats_fiscaux)
 #display_tax_calculation_waterfall(resultats_fiscaux)
 st.markdown("---")
 debug_fisca(resultats_fiscaux)
-

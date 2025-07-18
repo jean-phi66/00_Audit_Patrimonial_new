@@ -171,14 +171,11 @@ def remove_item(category, index):
 
 # --- Fonctions d'analyse immobilière ---
 
-def find_associated_loan(asset_id, passifs):
-    """Trouve le premier prêt associé à un ID d'actif."""
+def find_associated_loans(asset_id, passifs):
+    """Trouve tous les prêts associés à un ID d'actif."""
     if not asset_id:
-        return None
-    for p in passifs:
-        if p.get('actif_associe_id') == asset_id:
-            return p
-    return None
+        return []
+    return [p for p in passifs if p.get('actif_associe_id') == asset_id]
 
 def calculate_gross_yield(asset):
     """Calcule la rentabilité brute en %."""
@@ -198,7 +195,7 @@ def calculate_net_yield_charges(asset):
     revenu_net_charges = loyers_annuels - charges_annuelles - taxe_fonciere
     return (revenu_net_charges / valeur_achat) * 100
 
-def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct, year=None):
+def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None):
     """Calcule l'impôt total (IR + PS) sur les revenus fonciers au régime réel."""
     if year is None:
         year = date.today().year
@@ -207,9 +204,8 @@ def calculate_property_tax(asset, loan, tmi_pct, social_tax_pct, year=None):
     charges_annuelles = asset.get('charges', 0) * 12
     taxe_fonciere = asset.get('taxe_fonciere', 0)
     
-    # Utilisation de la fonction précise pour les intérêts
-    loan_breakdown = calculate_loan_annual_breakdown(loan, year=year)
-    interets_emprunt = loan_breakdown['interest']
+    # Agréger les intérêts de tous les prêts associés
+    interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=year).get('interest', 0) for l in loans)
 
     charges_deductibles = charges_annuelles + taxe_fonciere + interets_emprunt
     revenu_foncier_imposable = max(0, loyers_annuels - charges_deductibles)
@@ -258,7 +254,7 @@ def calculate_net_yield_tax(asset, total_annual_tax):
     revenu_final = loyers_annuels - charges_annuelles - taxe_fonciere - total_annual_tax
     return (revenu_final / valeur_achat) * 100
 
-def calculate_savings_effort(asset, loan, total_annual_tax, year=None):
+def calculate_savings_effort(asset, loans, total_annual_tax, year=None):
     """Calcule le cash-flow mensuel (effort d'épargne) pour une année donnée."""
     if year is None:
         year = date.today().year
@@ -267,9 +263,9 @@ def calculate_savings_effort(asset, loan, total_annual_tax, year=None):
     charges_mensuelles = asset.get('charges', 0)
     taxe_fonciere_mensuelle = asset.get('taxe_fonciere', 0) / 12
 
-    # Calculer la mensualité pour l'année donnée. Elle est de 0 si le prêt est terminé.
-    paiement_annuel_pret = calculate_loan_annual_breakdown(loan, year=year).get('total_paid', 0) if loan else 0
-    mensualite_pret = paiement_annuel_pret / 12
+    # Agréger les mensualités de tous les prêts pour l'année donnée
+    paiements_annuels_prets = sum(calculate_loan_annual_breakdown(l, year=year).get('total_paid', 0) for l in loans)
+    mensualites_prets = paiements_annuels_prets / 12
 
-    cash_flow = loyers_mensuels - charges_mensuelles - taxe_fonciere_mensuelle - mensualite_pret - (total_annual_tax / 12)
+    cash_flow = loyers_mensuels - charges_mensuelles - taxe_fonciere_mensuelle - mensualites_prets - (total_annual_tax / 12)
     return cash_flow

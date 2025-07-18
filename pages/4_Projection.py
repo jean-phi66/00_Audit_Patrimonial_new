@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.figure_factory as ff
-from datetime import date, timedelta
+from datetime import date
 import plotly.express as px
+from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loans, calculate_crd
 
 import sys
 import os
@@ -10,8 +11,7 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
-from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loan
+from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loans
 
 try:
     from utils.openfisca_utils import analyser_fiscalite_foyer
@@ -122,7 +122,7 @@ def generate_gantt_data(parents, enfants, settings, projection_duration):
 
     return gantt_data
 
-def generate_financial_projection(parents, enfants, settings, projection_duration):
+def generate_financial_projection(parents, enfants, passifs, settings, projection_duration):
     """Génère les données de projection financière année par année."""
     projection_data = []
     today = date.today()
@@ -136,7 +136,6 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             'pension_annuelle': settings[prenom].get('pension_annuelle', 25000)
         }
 
-    passifs = st.session_state.get('passifs', [])
     actifs_productifs = [a for a in st.session_state.get('actifs', []) if a.get('type') == 'Immobilier productif']
 
     for i in range(projection_duration + 1):
@@ -245,8 +244,8 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
             charges_annuelles = asset.get('charges', 0) * 12
             taxe_fonciere = asset.get('taxe_fonciere', 0)
             
-            loan = find_associated_loan(asset.get('id'), passifs)
-            interets_emprunt = calculate_loan_annual_breakdown(loan, year=annee).get('interest', 0)
+            loans = find_associated_loans(asset.get('id'), passifs)
+            interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=annee).get('interest', 0) for l in loans)
 
             charges_deductibles_asset = charges_annuelles + taxe_fonciere + interets_emprunt
             total_loyers_bruts_annee += loyers_annuels
@@ -298,29 +297,69 @@ def generate_financial_projection(parents, enfants, settings, projection_duratio
         year_data['Revenus du foyer'] = total_revenus_foyer + year_data['Loyers perçus'] + year_data['Autres revenus']
         year_data['Reste à vivre'] = year_data['Revenus du foyer'] - total_depenses - impot - prelevements_sociaux
 
+        # --- Calcul du CRD pour chaque prêt ---
+        for pret in passifs:
+            pret_id = pret['id']
+            crd_fin_annee = calculate_crd(
+                principal=pret.get('montant_initial', 0),
+                annual_rate_pct=pret.get('taux_annuel'),
+                duration_months=pret.get('duree_mois', 0),
+                start_date=pret.get('date_debut'),
+                on_date=date(annee, 12, 31)
+            )
+            year_data[f"CRD_{pret_id}"] = crd_fin_annee
+
         projection_data.append(year_data)
         
     df = pd.DataFrame(projection_data)
 
-    # Réordonner les colonnes pour plus de clarté
-    column_order = ['Année']
+    # Définir l'ordre des colonnes principales pour l'affichage
+    main_columns = ['Année']
     for parent in parents:
-        column_order.extend([f'Âge {parent["prenom"]}', f'Statut {parent["prenom"]}', f'Revenu {parent["prenom"]}'])
+        main_columns.extend([f'Âge {parent["prenom"]}', f'Statut {parent["prenom"]}', f'Revenu {parent["prenom"]}'])
     for enfant in enfants:
-        column_order.extend([f'Âge {enfant["prenom"]}', f'Statut {enfant["prenom"]}'])
-    column_order.extend([
-        'Revenus bruts du foyer', 'Loyers perçus', 'Revenu Foncier Net', 'Autres revenus', 'Revenus du foyer', 
+        main_columns.extend([f'Âge {enfant["prenom"]}', f'Statut {enfant["prenom"]}'])
+    main_columns.extend([
+        'Revenus bruts du foyer', 'Loyers perçus', 'Revenu Foncier Net', 'Autres revenus', 'Revenus du foyer',
         'Mensualités Prêts', 'Charges Immobilières', 'Taxes Foncières', 'Autres Dépenses', 'Coût des études',
         'Impôt sur le revenu', 'Prélèvements Sociaux', 'Reste à vivre'
     ])
 
-    # S'assurer que toutes les colonnes existent pour éviter les erreurs
-    for col in column_order:
+    # S'assurer que les colonnes principales existent
+    for col in main_columns:
         if col not in df.columns:
             df[col] = 0
 
-    df = df[column_order]
+    # Récupérer les autres colonnes (comme les CRD) qui ne sont pas dans les colonnes principales
+    other_columns = [col for col in df.columns if col not in main_columns]
+
+    # Combiner les listes pour le nouvel ordre final et réordonner le DataFrame
+    df = df[main_columns + other_columns]
     return df
+
+def display_loan_crd_chart(df_projection, passifs):
+    """Affiche un graphique de l'évolution du Capital Restant Dû des prêts."""
+    if not passifs:
+        st.info("Aucun passif (prêt) renseigné.")
+        return
+
+    # 1. Préparation des données pour le graphique
+    loan_options = {p['id']: p.get('libelle') or f"Prêt {p['id'][:4]}..." for p in passifs}
+    crd_columns = [col for col in df_projection.columns if col.startswith('CRD_')]
+    
+    if not crd_columns:
+        st.info("Aucune donnée de Capital Restant Dû à afficher.")
+        return
+
+    df_crd = df_projection[['Année'] + crd_columns].copy()
+    df_crd.columns = ['Année'] + [loan_options.get(col.replace('CRD_', ''), col) for col in df_crd.columns[1:]]
+    df_crd = df_crd.set_index('Année')
+
+    # 2. Création du graphique
+    fig = px.bar(df_crd, x=df_crd.index, y=df_crd.columns, title="Répartition du Capital Restant Dû par Emprunt", labels={'value': "Capital Restant Dû (€)", 'index': "Année", 'variable': 'Prêt'})
+    fig.update_layout(barmode='stack', yaxis_title="Capital Restant Dû (€)", xaxis_title="Année", legend_title_text='Prêts')
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # --- Fonctions d'interface utilisateur (UI) ---
 
@@ -329,7 +368,7 @@ def display_settings_ui(parents, enfants):
     with st.expander("⚙️ Paramètres de la projection", expanded=True):
         duree_projection = st.number_input(
             "Durée de la projection (années)",
-            min_value=1, max_value=50, value=20, step=1,
+            min_value=1, max_value=50, value=25, step=1,
             help="Nombre d'années à projeter après le départ à la retraite des parents."
         )
         st.markdown("---")
@@ -449,9 +488,74 @@ def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
         yaxis=dict(
             title='Membre du Foyer',
             tickfont=dict(size=14)
-        )
+        ),
+        height=len(parents + enfants) * 80 + 150 # Ajuster la hauteur en fonction du nombre de membres
     )
     st.plotly_chart(fig, use_container_width=True)
+
+def display_financial_projection(df_projection):
+    """Affiche le tableau et le graphique de la projection financière."""
+    st.header("📈 Projection Financière Annuelle")
+    if not OPENFISCA_UTILITY_AVAILABLE:
+        error_msg = st.session_state.get('openfisca_import_error', "Erreur inconnue.")
+        st.warning(
+            "**Le module OpenFisca n'a pas pu être chargé.** Les calculs d'impôts seront des estimations simplifiées (taux forfaitaire de 15%).\n\n"
+            f"**Erreur technique :** `{error_msg}`\n\n"
+            "Pour un calcul précis, assurez-vous que le package `openfisca-france` est bien installé dans votre environnement."
+        )
+
+    if df_projection.empty:
+        st.info("Aucune donnée de projection financière à afficher.")
+    else:
+        with st.expander("Détails de la projection financière"):
+            display_projection_table(df_projection)
+        display_projection_chart(df_projection)
+
+        # Nouveaux graphiques et métriques pour la fiscalité
+        st.markdown("---")
+        st.header("🔎 Focus Fiscalité")
+        display_annual_tax_chart(df_projection)
+        display_cumulative_tax_at_retirement(df_projection, parents, settings)
+
+if(False):
+    # --- Exécution Principale ---
+
+    """Fonction principale pour exécuter la page de projection."""
+    st.title("🗓️ Projection des grandes étapes de vie")
+    st.markdown("Définissez les âges clés pour chaque membre du foyer afin de visualiser une frise chronologique de leurs activités.")
+
+    if 'parents' not in st.session_state or not st.session_state.parents or not st.session_state.parents[0].get('prenom'):
+        st.warning("⚠️ Veuillez d'abord renseigner les informations du foyer dans la page **1_Famille**.")
+        st.stop()
+
+    if 'projection_settings' not in st.session_state:
+        st.session_state.projection_settings = {}
+
+    parents = st.session_state.parents
+    enfants = st.session_state.enfants
+
+    duree_projection, settings = display_settings_ui(parents, enfants)
+
+    gantt_data = generate_gantt_data(parents, enfants, settings, duree_projection)
+    display_gantt_chart(gantt_data, duree_projection, parents, enfants)
+
+    df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
+
+    # Appel de la fonction pour afficher le graphique CRD
+    passifs = st.session_state.get('passifs', [])
+    for pret in passifs:
+        pret_id = pret['id']
+        df_projection[f"CRD_{pret_id}"] = calculate_crd(
+            principal=pret.get('montant_initial', 0),
+            annual_rate_pct=pret.get('taux_annuel'),
+            duration_months=pret.get('duree_mois', 0),
+            start_date=pret.get('date_debut'),
+            on_date=date(df_projection['Année'].max(), 12, 31)
+        )
+    display_loan_crd_chart(df_projection, passifs)
+
+    # Affichage des autres éléments (tableaux, graphiques existants)
+    display_financial_projection(df_projection)
 
 def display_projection_table(df_projection):
     """Affiche le tableau de la projection financière."""
@@ -608,7 +712,8 @@ duree_projection, settings = display_settings_ui(parents, enfants)
 gantt_data = generate_gantt_data(parents, enfants, settings, duree_projection)
 display_gantt_chart(gantt_data, duree_projection, parents, enfants)
 
-df_projection = generate_financial_projection(parents, enfants, settings, duree_projection)
+passifs = st.session_state.get('passifs', [])
+df_projection = generate_financial_projection(parents, enfants, passifs, settings, duree_projection)
 
 st.header("📈 Projection Financière Annuelle")
 if not OPENFISCA_UTILITY_AVAILABLE:
@@ -631,4 +736,7 @@ else:
     st.header("🔎 Focus Fiscalité")
     display_annual_tax_chart(df_projection)
     display_cumulative_tax_at_retirement(df_projection, parents, settings)
-
+    
+    st.markdown("---")
+    st.header("🔎 Focus Emprunts")
+    display_loan_crd_chart(df_projection, passifs)

@@ -23,5 +23,5 @@ with st.expander("Voir les données en cours (pour le développement)"):
     st.json(st.session_state.parents)
     st.json(st.session_state.enfants)
     st.write("### Données du Patrimoine :")
-    #st.json(st.session_state.actifs)
-    #st.json(st.session_state.passifs)
+    st.json(st.session_state.actifs)
+    st.json(st.session_state.passifs)
