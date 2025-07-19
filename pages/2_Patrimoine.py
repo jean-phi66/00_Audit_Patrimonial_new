@@ -95,21 +95,59 @@ def display_assets_ui():
                     )
                     
                     st.markdown("---")
-                    st.write("**Dispositif Fiscal**")
-                    actif['dispositif_fiscal'] = st.selectbox(
-                        "Dispositif applicable",
-                        options=["Aucun", "Pinel"],
-                        index=1 if actif.get('dispositif_fiscal') == 'Pinel' else 0,
-                        key=f"actif_dispositif_{i}"
+                    actif['mode_exploitation'] = st.radio(
+                        "Mode d'exploitation",
+                        options=["Location nue", "Location Meublée"],
+                        index=1 if actif.get('mode_exploitation') == 'Location Meublée' else 0,
+                        key=f"actif_mode_expl_{i}",
+                        horizontal=True
                     )
 
-                    if actif.get('dispositif_fiscal') == 'Pinel':
-                        actif['duree_dispositif'] = st.selectbox(
-                            "Durée d'engagement Pinel", options=[6, 9, 12],
-                            index=[6, 9, 12].index(actif.get('duree_dispositif', 9)),
-                            key=f"pinel_duree_{i}"
+                    if actif['mode_exploitation'] == "Location Meublée":
+                        # Si on passe en meublé, on s'assure que le dispositif fiscal est remis à "Aucun"
+                        if actif.get('dispositif_fiscal') != 'Aucun':
+                            actif['dispositif_fiscal'] = 'Aucun'
+                        
+                        st.write("**Détails pour l'amortissement (LMNP/LMP)**")
+                        # Correction: Suppression des colonnes imbriquées pour éviter une erreur Streamlit.
+                        actif['part_amortissable_foncier'] = st.number_input(
+                            "Valeur du Foncier (€)",
+                            value=actif.get('part_amortissable_foncier', 0.0),
+                            min_value=0.0, step=1000.0, format="%.2f",
+                            key=f"actif_foncier_{i}",
+                            help="Part non amortissable correspondant au terrain (ex: 15-20% de la valeur totale)."
                         )
-                        actif['annee_debut_dispositif'] = st.number_input("Année de début", min_value=2014, max_value=date.today().year, value=actif.get('annee_debut_dispositif', date.today().year - 1), key=f"pinel_annee_{i}")
+                        actif['part_travaux'] = st.number_input(
+                            "Valeur des Travaux (€)",
+                            value=actif.get('part_travaux', 0.0),
+                            min_value=0.0, step=1000.0, format="%.2f",
+                            key=f"actif_travaux_{i}",
+                            help="Montant des travaux réalisés, qui sont amortissables."
+                        )
+                        actif['part_meubles'] = st.number_input(
+                            "Valeur des Meubles (€)",
+                            value=actif.get('part_meubles', 0.0),
+                            min_value=0.0, step=500.0, format="%.2f",
+                            key=f"actif_meubles_{i}",
+                            help="Valeur du mobilier, qui est amortissable."
+                        )
+
+                    elif actif['mode_exploitation'] == "Location nue":
+                        st.write("**Dispositif Fiscal**")
+                        actif['dispositif_fiscal'] = st.selectbox(
+                            "Dispositif applicable",
+                            options=["Aucun", "Pinel"],
+                            index=1 if actif.get('dispositif_fiscal') == 'Pinel' else 0,
+                            key=f"actif_dispositif_{i}"
+                        )
+
+                        if actif.get('dispositif_fiscal') == 'Pinel':
+                            actif['duree_dispositif'] = st.selectbox(
+                                "Durée d'engagement Pinel", options=[6, 9, 12],
+                                index=[6, 9, 12].index(actif.get('duree_dispositif', 9)),
+                                key=f"pinel_duree_{i}"
+                            )
+                            actif['annee_debut_dispositif'] = st.number_input("Année de début", min_value=2014, max_value=date.today().year, value=actif.get('annee_debut_dispositif', date.today().year - 1), key=f"pinel_annee_{i}")
 
                 elif actif['type'] == "Immobilier de jouissance":
                     st.markdown("---")

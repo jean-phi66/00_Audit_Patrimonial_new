@@ -177,6 +177,37 @@ def find_associated_loans(asset_id, passifs):
         return []
     return [p for p in passifs if p.get('actif_associe_id') == asset_id]
 
+def calculate_lmnp_amortissement_annuel(asset):
+    """
+    Calcule l'amortissement annuel potentiel pour un bien en location meublée.
+    Les durées sont des standards couramment admis.
+    """
+    DUREE_AMORTISSEMENT_IMMEUBLE = 30  # ans
+    DUREE_AMORTISSEMENT_TRAVAUX = 15   # ans
+    DUREE_AMORTISSEMENT_MEUBLES = 7    # ans
+
+    valeur_totale = asset.get('valeur', 0)
+    valeur_foncier = asset.get('part_amortissable_foncier', 0)
+    valeur_travaux = asset.get('part_travaux', 0)
+    valeur_meubles = asset.get('part_meubles', 0)
+
+    # La base amortissable de l'immeuble est la valeur totale moins les autres parts.
+    base_immeuble = max(0, valeur_totale - valeur_foncier - valeur_travaux - valeur_meubles)
+
+    amortissement_immeuble = base_immeuble / DUREE_AMORTISSEMENT_IMMEUBLE if DUREE_AMORTISSEMENT_IMMEUBLE > 0 else 0
+    amortissement_travaux = valeur_travaux / DUREE_AMORTISSEMENT_TRAVAUX if DUREE_AMORTISSEMENT_TRAVAUX > 0 else 0
+    amortissement_meubles = valeur_meubles / DUREE_AMORTISSEMENT_MEUBLES if DUREE_AMORTISSEMENT_MEUBLES > 0 else 0
+
+    total = amortissement_immeuble + amortissement_travaux + amortissement_meubles
+
+    return {
+        'immeuble': amortissement_immeuble,
+        'travaux': amortissement_travaux,
+        'meubles': amortissement_meubles,
+        'total': total
+    }
+
+
 def calculate_gross_yield(asset):
     """Calcule la rentabilité brute en %."""
     loyers_annuels = asset.get('loyers_mensuels', 0) * 12
@@ -195,7 +226,7 @@ def calculate_net_yield_charges(asset):
     revenu_net_charges = loyers_annuels - charges_annuelles - taxe_fonciere
     return (revenu_net_charges / valeur_achat) * 100
 
-def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None):
+def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None, amortissement_annuel_utilise=0.0):
     """Calcule l'impôt total (IR + PS) sur les revenus fonciers au régime réel."""
     if year is None:
         year = date.today().year
@@ -208,7 +239,7 @@ def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None):
     interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=year).get('interest', 0) for l in loans)
 
     charges_deductibles = charges_annuelles + taxe_fonciere + interets_emprunt
-    revenu_foncier_imposable = max(0, loyers_annuels - charges_deductibles)
+    revenu_foncier_imposable = max(0, loyers_annuels - charges_deductibles - amortissement_annuel_utilise)
     
     impot_sur_revenu = revenu_foncier_imposable * (tmi_pct / 100)
     prelevements_sociaux = revenu_foncier_imposable * (social_tax_pct / 100)

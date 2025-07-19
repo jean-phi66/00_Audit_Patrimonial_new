@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from datetime import date
@@ -19,7 +20,8 @@ from core.patrimoine_logic import (
     calculate_net_yield_tax,
     calculate_savings_effort,
     find_associated_loans,
-    calculate_loan_annual_breakdown
+    calculate_loan_annual_breakdown,
+    calculate_lmnp_amortissement_annuel
 ) 
 
 def calculate_property_metrics(asset, passifs, tmi, social_tax):
@@ -33,9 +35,15 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax):
     # 2. Calculer les différentes rentabilités
     metrics['gross_yield'] = calculate_gross_yield(asset)
     metrics['net_yield_charges'] = calculate_net_yield_charges(asset)
+    metrics['amortissement_annuel_potentiel'] = 0
+
+    # Calcul de l'amortissement si LMNP
+    if asset.get('mode_exploitation') == 'Location Meublée':
+        amortissement_info = calculate_lmnp_amortissement_annuel(asset)
+        metrics['amortissement_annuel_potentiel'] = amortissement_info['total']
     
     # 3. Calculer l'impôt et la rentabilité nette de fiscalité
-    tax_info = calculate_property_tax(asset, loans, tmi, social_tax)
+    tax_info = calculate_property_tax(asset, loans, tmi, social_tax, amortissement_annuel_utilise=metrics['amortissement_annuel_potentiel'])
     metrics['tax_info'] = tax_info
     metrics['net_yield_after_tax'] = calculate_net_yield_tax(asset, tax_info['total'])
 
@@ -73,32 +81,134 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax):
 
     return metrics
 
+def _create_waterfall_fig(metrics, is_lmnp=False):
+    """Crée le graphique en cascade pour une location nue ou meublée."""
+    # Définir le libellé final en fonction du résultat pour plus de clarté
+    final_label = "Cash-flow Net Annuel"
+    if metrics['cash_flow_annuel'] < 0:
+        final_label = "Effort d'Épargne Annuel"
+
+    # Base commune du graphique
+    revenus_nets_label = "Revenus LMNP nets" if is_lmnp else "Revenus Fonciers Nets"
+    base_x = ["Loyers Bruts", "Charges", "Taxe Foncière", "Loyers Nets de Charges", "Intérêts d'emprunt", revenus_nets_label]
+    base_y = [
+        metrics['loyers_annuels'], -metrics['charges_annuelles'], -metrics['taxe_fonciere'], 
+        None,  # Total: Loyers Nets de Charges
+        -metrics['interets_annuels'],
+        None   # Total: Revenus Fonciers Nets
+    ]
+    base_text = [
+        f"{metrics['loyers_annuels']:,.0f} €", f"{-metrics['charges_annuelles']:,.0f} €", f"{-metrics['taxe_fonciere']:,.0f} €",
+        f"{metrics['loyers_nets_de_charges']:,.0f} €",
+        f"{-metrics['interets_annuels']:,.0f} €",
+        f"{metrics['revenus_fonciers_nets']:,.0f} €",
+    ]
+    base_measures = ["absolute", "relative", "relative", "total", "relative", "total"]
+
+    if is_lmnp:
+        # Cas LMNP : pas de réduction d'impôt affichée
+        x_labels = base_x + ["Impôt (IR)", "Prélèv. Sociaux", "Résultat avant capital", "Remboursement du Capital", final_label]
+        measures = base_measures + ["relative", "relative", "total", "relative", "total"]
+        y_values = base_y + [
+            -metrics['tax_info']['ir'], -metrics['tax_info']['ps'],
+            None,  # Total: Résultat avant capital
+            -metrics['capital_rembourse_annuel'],
+            None   # Total final
+        ]
+        text_values = base_text + [
+            f"{-metrics['tax_info']['ir']:,.0f} €", f"{-metrics['tax_info']['ps']:,.0f} €",
+            f"{metrics['resultat_avant_remboursement_capital']:,.0f} €",
+            f"{-metrics['capital_rembourse_annuel']:,.0f} €",
+            f"{metrics['cash_flow_annuel']:,.0f} €"
+        ]
+    else:
+        # Cas Location Nue : avec réduction d'impôt
+        x_labels = base_x + ["Impôt (IR)", "Prélèv. Sociaux", "Réduction d'impôt", "Résultat avant capital", "Remboursement du Capital", final_label]
+        measures = base_measures + ["relative", "relative", "relative", "total", "relative", "total"]
+        y_values = base_y + [
+            -metrics['tax_info']['ir'], -metrics['tax_info']['ps'], metrics['reduction_pinel'],
+            None,  # Total: Résultat avant capital
+            -metrics['capital_rembourse_annuel'],
+            None   # Total final
+        ]
+        text_values = base_text + [
+            f"{-metrics['tax_info']['ir']:,.0f} €", f"{-metrics['tax_info']['ps']:,.0f} €",
+            f"+{metrics['reduction_pinel']:,.0f} €" if metrics['reduction_pinel'] > 0 else " ",
+            f"{metrics['resultat_avant_remboursement_capital']:,.0f} €",
+            f"{-metrics['capital_rembourse_annuel']:,.0f} €",
+            f"{metrics['cash_flow_annuel']:,.0f} €"
+        ]
+
+    fig = go.Figure(go.Waterfall(
+        name="Cash-flow",
+        orientation="v",
+        measure=measures,
+        x=x_labels,
+        y=y_values,
+        textposition="outside",
+        text=text_values,
+        connector={"line": {"color": "rgb(63, 63, 63)"}},
+        textfont=dict(size=16),
+    ))
+
+    # Calculer les limites de l'axe Y pour assurer la visibilité des labels
+    # On reconstruit la liste des totaux à partir des métriques calculées,
+    # car la liste y_values contient des 'None' pour les barres de totaux, ce qui causait l'erreur.
+    all_totals = [
+        metrics['loyers_annuels'],
+        metrics['loyers_nets_de_charges'],
+        metrics['revenus_fonciers_nets'],
+        metrics['resultat_avant_remboursement_capital'],
+        metrics['cash_flow_annuel']
+    ]
+
+    # On filtre les éventuelles valeurs None avant de passer à max() et min() pour éviter le TypeError.
+    valid_totals = [t for t in all_totals if t is not None]
+    max_y = max(0, *valid_totals)
+    min_y = min(0, *valid_totals)
+    y_padding = (max_y - min_y) * 0.1
+    if y_padding == 0:  # Cas où toutes les valeurs sont nulles
+        y_padding = 1000  # Une valeur par défaut pour créer un peu d'espace
+
+    fig.update_layout(title="Décomposition du Cash-flow Annuel", showlegend=False, yaxis_title="Montant (€)", title_font_size=18, xaxis_tickfont_size=16, yaxis_range=[min_y - y_padding, max_y + y_padding])
+
+    return fig
+
 def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projection_duration):
     """Affiche les métriques de rentabilité pré-calculées pour un bien immobilier."""
 
     with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')}", expanded=True):
         # --- Affichage des métriques principales ---
-        col1, col2, col3, col4 = st.columns(4)
+        main_cols = st.columns(5 if asset.get('mode_exploitation') == 'Location Meublée' else 4)
 
-        with col1:
+        with main_cols[0]:
             st.metric(
                 label="Rentabilité Brute",
                 value=f"{metrics['gross_yield']:.2f} %",
                 help="Loyers annuels / Prix d'achat"
             )
-        with col2:
+        with main_cols[1]:
             st.metric(
                 label="Rentabilité Nette de charges",
                 value=f"{metrics['net_yield_charges']:.2f} %",
                 help="(Loyers - Charges - Taxe Foncière) / Prix d'achat"
             )
-        with col3:
+        with main_cols[2]:
             st.metric(
                 label="Rentabilité Nette de fiscalité",
                 value=f"{metrics['net_yield_after_tax']:.2f} %",
                 help="Rentabilité nette après déduction de l'impôt sur les revenus fonciers et des prélèvements sociaux."
             )
-        with col4:
+        
+        if asset.get('mode_exploitation') == 'Location Meublée':
+            with main_cols[3]:
+                st.metric(
+                    label="Amortissement Annuel",
+                    value=f"{metrics['amortissement_annuel_potentiel']:,.0f} €",
+                    help="Montant annuel de la dépréciation du bien, des travaux et des meubles, déductible des revenus locatifs."
+                )
+        
+        with main_cols[-1]: # Toujours la dernière colonne
             st.metric(
                 label="Effort d'épargne mensuel",
                 value=f"{metrics['savings_effort']:,.2f} €",
@@ -110,85 +220,8 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
         # --- Graphique en cascade ---
         st.markdown("---")
         
-        # Définir le libellé final en fonction du résultat pour plus de clarté
-        final_label = "Cash-flow Net Annuel"
-        if metrics['cash_flow_annuel'] < 0:
-            final_label = "Effort d'Épargne Annuel"
-
-        fig = go.Figure(go.Waterfall(
-            name = "Cash-flow", 
-            orientation = "v",
-            measure = [
-                "absolute", "relative", "relative", "total", # -> Loyers Nets de Charges
-                "relative", "total",                         # -> Revenus Fonciers Nets
-                "relative", "relative", "relative", "total", # -> Résultat avant capital
-                "relative", "total"                          # -> Total final
-            ],
-            x = [
-                "Loyers Bruts", "Charges", "Taxe Foncière", 
-                "Loyers Nets de Charges",
-                "Intérêts d'emprunt",
-                "Revenus Fonciers Nets",
-                "Impôt (IR)", "Prélèv. Sociaux", "Réduction d'impôt",
-                "Résultat avant capital",
-                "Remboursement du Capital",
-                final_label
-            ],
-            textposition = "outside",
-            text = [
-                f"{metrics['loyers_annuels']:,.0f} €", f"{-metrics['charges_annuelles']:,.0f} €", f"{-metrics['taxe_fonciere']:,.0f} €",
-                f"{metrics['loyers_nets_de_charges']:,.0f} €",
-                f"{-metrics['interets_annuels']:,.0f} €",
-                f"{metrics['revenus_fonciers_nets']:,.0f} €",
-                f"{-metrics['tax_info']['ir']:,.0f} €", f"{-metrics['tax_info']['ps']:,.0f} €",
-                f"+{metrics['reduction_pinel']:,.0f} €" if metrics['reduction_pinel'] > 0 else " ",
-                f"{metrics['resultat_avant_remboursement_capital']:,.0f} €",
-                f"{-metrics['capital_rembourse_annuel']:,.0f} €",
-                f"{metrics['cash_flow_annuel']:,.0f} €"
-            ],
-            y = [
-                metrics['loyers_annuels'], -metrics['charges_annuelles'], -metrics['taxe_fonciere'], 
-                None, # Total: Loyers Nets de Charges
-                -metrics['interets_annuels'],
-                None, # Total: Revenus Fonciers Nets
-                -metrics['tax_info']['ir'], -metrics['tax_info']['ps'], metrics['reduction_pinel'],
-                None, # Total: Résultat avant capital
-                -metrics['capital_rembourse_annuel'],
-                None # Total final
-            ],
-            connector = {"line":{"color":"rgb(63, 63, 63)"}},
-            textfont=dict(
-                size=16,
-            ),
-        ))
-
-        # Calculer les limites de l'axe Y pour assurer la visibilité des labels
-        all_totals = [
-            metrics['loyers_annuels'],
-            metrics['loyers_nets_de_charges'],
-            metrics['revenus_fonciers_nets'],
-            metrics['resultat_avant_remboursement_capital'],
-            metrics['cash_flow_annuel']
-        ]
-        
-        # On inclut 0 dans le calcul pour gérer le cas où tous les totaux sont positifs ou négatifs
-        max_y = max(0, *all_totals)
-        min_y = min(0, *all_totals)
-
-        # Ajouter un padding pour que les textes "outside" soient visibles
-        # On prend 10% de l'amplitude totale comme marge en haut et en bas
-        y_padding = (max_y - min_y) * 0.1
-        if y_padding == 0: # Cas où toutes les valeurs sont nulles
-            y_padding = 1000 # Une valeur par défaut pour créer un peu d'espace
-
-        fig.update_layout(
-                title="Décomposition du Cash-flow Annuel",
-                showlegend=False,
-                yaxis_title="Montant (€)",
-                title_font_size=18,
-                xaxis_tickfont_size=16,
-                yaxis_range=[min_y - y_padding, max_y + y_padding]
-        )
+        is_lmnp = asset.get('mode_exploitation') == 'Location Meublée'
+        fig = _create_waterfall_fig(metrics, is_lmnp=is_lmnp)
         st.plotly_chart(fig, use_container_width=True)
 
         # --- Métriques de synthèse post-graphique ---
@@ -221,6 +254,13 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
         df_projection = generate_projection_data(asset, loans, tmi, social_tax, projection_duration)
         if not df_projection.empty:
             display_projection_charts(df_projection, projection_duration)
+            
+            if asset.get('mode_exploitation') == 'Location Meublée':
+                st.markdown("---")
+                st.subheader("📊 Projections Spécifiques LMNP")
+                st.info("Ce graphique montre l'évolution de votre **réserve d'amortissement**. C'est le stock d'amortissement que vous n'avez pas pu utiliser les années précédentes (car vos revenus étaient trop faibles) et que vous pouvez reporter pour réduire vos impôts futurs.")
+                fig_amortissement = create_amortissement_projection_fig(df_projection)
+                st.plotly_chart(fig_amortissement, use_container_width=True)
 
 def display_non_productive_analysis(asset, passifs):
     """Affiche l'analyse du coût de possession pour un bien de jouissance."""
@@ -279,13 +319,11 @@ def display_non_productive_analysis(asset, passifs):
             name = "Coût de possession", 
             orientation = "v",
             measure = [
-                "relative", "relative", "total", # -> Coût des charges et taxes
-                "relative", "total",             # -> Coût de possession annuel
-                "relative", "total"              # -> Décaissement total
+                "relative", "relative", "relative", "total", # -> Coût de possession annuel
+                "relative", "total"                          # -> Décaissement total
             ],
             x = [
                 "Charges", "Taxe Foncière", 
-                "Coût des charges et taxes",
                 "Intérêts d'emprunt",
                 "Coût de Possession Annuel",
                 "Remboursement du Capital",
@@ -294,44 +332,104 @@ def display_non_productive_analysis(asset, passifs):
             textposition = "outside",
             text = [
                 f"{-charges_annuelles:,.0f} €", f"{-taxe_fonciere:,.0f} €",
-                f"{-cout_charges_taxes:,.0f} €",
                 f"{-interets_annuels:,.0f} €",
                 f"{-cout_possession_annuel:,.0f} €",
                 f"{-capital_rembourse_annuel:,.0f} €",
                 f"{-decaissement_total_annuel:,.0f} €"
             ],
-            y = [ -charges_annuelles, -taxe_fonciere, None, -interets_annuels, None, -capital_rembourse_annuel, None ],
+            y = [ -charges_annuelles, -taxe_fonciere, -interets_annuels, None, -capital_rembourse_annuel, None ],
             connector = {"line":{"color":"rgb(63, 63, 63)"}},
         ))
 
         fig.update_layout(title="Décomposition du Décaissement Annuel", showlegend=False, yaxis_title="Montant (€)")
         st.plotly_chart(fig, use_container_width=True)
 
-
 def generate_projection_data(asset, loans, tmi_pct, social_tax_pct, projection_duration):
     """Génère les données de projection pour le cash-flow et l'effet de levier."""
     projection_data = []
     start_year = date.today().year
+    reserve_amortissement_reportee = 0
+
+    # --- Initialisation pour la logique d'amortissement LMNP ---
+    is_lmnp = asset.get('mode_exploitation') == 'Location Meublée'
+    stock_amortissement_restant = {'immeuble': 0, 'travaux': 0, 'meubles': 0}
+    amortissement_annuel = {'immeuble': 0, 'travaux': 0, 'meubles': 0}
+
+    if is_lmnp:
+        # Durées d'amortissement
+        DUREE_AMORTISSEMENT_IMMEUBLE = 30
+        DUREE_AMORTISSEMENT_TRAVAUX = 15
+        DUREE_AMORTISSEMENT_MEUBLES = 7
+
+        # Bases amortissables initiales
+        valeur_totale = asset.get('valeur', 0)
+        valeur_foncier = asset.get('part_amortissable_foncier', 0)
+        valeur_travaux = asset.get('part_travaux', 0)
+        valeur_meubles = asset.get('part_meubles', 0)
+        
+        base_immeuble = max(0, valeur_totale - valeur_foncier - valeur_travaux - valeur_meubles)
+        
+        stock_amortissement_restant['immeuble'] = base_immeuble
+        stock_amortissement_restant['travaux'] = valeur_travaux
+        stock_amortissement_restant['meubles'] = valeur_meubles
+
+        # Calcul des dotations annuelles
+        amortissement_annuel['immeuble'] = base_immeuble / DUREE_AMORTISSEMENT_IMMEUBLE if DUREE_AMORTISSEMENT_IMMEUBLE > 0 else 0
+        amortissement_annuel['travaux'] = valeur_travaux / DUREE_AMORTISSEMENT_TRAVAUX if DUREE_AMORTISSEMENT_TRAVAUX > 0 else 0
+        amortissement_annuel['meubles'] = valeur_meubles / DUREE_AMORTISSEMENT_MEUBLES if DUREE_AMORTISSEMENT_MEUBLES > 0 else 0
 
     for year in range(start_year, start_year + projection_duration + 1):
-        # 1. Calcul du capital remboursé pour l'année
+        # --- Calculs communs ---
         capital_rembourse_annuel = sum(calculate_loan_annual_breakdown(l, year=year).get('capital', 0) for l in loans)
+        amortissement_utilise_annee = 0
 
-        # 2. Calcul de l'impôt pour l'année
-        tax_info = calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=year)
+        # --- Logique spécifique à la location meublée (LMNP) ---
+        if is_lmnp:
+            # 1. Calculer l'amortissement potentiel de l'année en consommant les stocks
+            amortissement_potentiel_annee = 0
+            for comp in ['immeuble', 'travaux', 'meubles']:
+                if stock_amortissement_restant[comp] > 0:
+                    dotation = min(stock_amortissement_restant[comp], amortissement_annuel[comp])
+                    amortissement_potentiel_annee += dotation
+                    stock_amortissement_restant[comp] -= dotation
+            
+            amortissement_disponible = amortissement_potentiel_annee + reserve_amortissement_reportee
 
-        # 3. Calcul du cash-flow pour l'année
+            # 2. Calculer le revenu avant amortissement pour déterminer le plafond
+            loyers_annuels = asset.get('loyers_mensuels', 0) * 12
+            charges_annuelles = asset.get('charges', 0) * 12
+            taxe_fonciere = asset.get('taxe_fonciere', 0)
+            interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=year).get('interest', 0) for l in loans)
+            revenu_avant_amortissement = max(0, loyers_annuels - charges_annuelles - taxe_fonciere - interets_emprunt)
+
+            # 3. Déterminer l'amortissement réellement utilisé et la nouvelle réserve
+            amortissement_utilise_annee = min(amortissement_disponible, revenu_avant_amortissement)
+            reserve_amortissement_reportee = amortissement_disponible - amortissement_utilise_annee
+
+        # --- Calcul de l'impôt pour l'année (tenant compte de l'amortissement utilisé) ---
+        tax_info = calculate_property_tax(
+            asset, loans, tmi_pct, social_tax_pct, year=year, 
+            amortissement_annuel_utilise=amortissement_utilise_annee
+        )
+
+        # --- Calcul du cash-flow pour l'année ---
         cash_flow_mensuel = calculate_savings_effort(asset, loans, tax_info['total'], year=year)
         cash_flow_annuel = cash_flow_mensuel * 12
 
-        # 4. Calcul de l'effet de levier
+        # --- Calcul de l'effet de levier ---
         effort_epargne_annuel = -cash_flow_annuel
         leverage = np.nan # Par défaut, pas de levier calculable
         if effort_epargne_annuel > 0 and capital_rembourse_annuel > 0:
             leverage = capital_rembourse_annuel / effort_epargne_annuel
         
+        # Ajout du stock d'amortissement restant pour le graphique
+        total_stock_restant = sum(stock_amortissement_restant.values()) if is_lmnp else 0
+
         projection_data.append({
             'Année': year,
+            'Amortissement Utilisé': amortissement_utilise_annee,
+            'Réserve d\'Amortissement': reserve_amortissement_reportee,
+            'Stock d\'Amortissement Potentiel': total_stock_restant,
             'Cash-flow Annuel': cash_flow_annuel,
             'Effet de Levier': leverage,
             'Capital Remboursé': capital_rembourse_annuel,
@@ -371,6 +469,53 @@ def create_leverage_projection_fig(df_projection):
         y_axis_max = 5
 
     fig.update_layout(yaxis_title="Ratio (Capital créé / Effort d'épargne)", yaxis=dict(range=[0, y_axis_max]))
+    return fig
+
+def create_amortissement_projection_fig(df_projection):
+    """Crée la figure du graphique de projection de l'amortissement."""
+    # Création d'une figure avec un axe Y secondaire
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # --- Axe Y Primaire (gauche) : Utilisation de l'amortissement ---
+    # Zone pour l'amortissement utilisé
+    fig.add_trace(go.Scatter(
+        x=df_projection['Année'], 
+        y=df_projection['Amortissement Utilisé'],
+        hovertemplate='Amortissement Utilisé: %{y:,.0f}€<extra></extra>',
+        mode='lines',
+        line=dict(width=0.5),
+        stackgroup='one',
+        name='Amortissement Utilisé'
+    ), secondary_y=False)
+    # Zone pour la réserve d'amortissement (reportable)
+    fig.add_trace(go.Scatter(
+        x=df_projection['Année'], 
+        y=df_projection['Réserve d\'Amortissement'],
+        hovertemplate='Réserve d\'Amortissement: %{y:,.0f}€<extra></extra>',
+        mode='lines',
+        line=dict(width=0.5),
+        stackgroup='one',
+        name='Réserve d\'Amortissement'
+    ), secondary_y=False)
+
+    # --- Axe Y Secondaire (droite) : Stock d'amortissement potentiel ---
+    fig.add_trace(go.Scatter(
+        x=df_projection['Année'],
+        y=df_projection['Stock d\'Amortissement Potentiel'],
+        name="Stock Amortissable Restant",
+        mode='lines+markers',
+        line=dict(color='black', dash='dot'),
+        hovertemplate='Stock Restant: %{y:,.0f}€<extra></extra>'
+    ), secondary_y=True)
+
+    # Mise en forme du graphique
+    fig.update_layout(
+        title_text="Évolution de l'Amortissement et du Stock Amortissable",
+        legend_title_text='Composants'
+    )
+    fig.update_xaxes(title_text="Année")
+    fig.update_yaxes(title_text="<b>Utilisation Annuelle</b> (€)", secondary_y=False)
+    fig.update_yaxes(title_text="<b>Stock Amortissable</b> (€)", secondary_y=True)
     return fig
 
 def display_projection_charts(df_projection, projection_duration):
