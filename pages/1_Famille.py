@@ -38,7 +38,7 @@ def remove_parent():
 
 def add_child():
     """Ajoute un enfant à la session state."""
-    st.session_state.enfants.append({'prenom': '', 'date_naissance': None})
+    st.session_state.enfants.append({'prenom': '', 'date_naissance': None, 'garde_alternee': False})
     st.rerun()
 
 def remove_child(index):
@@ -51,17 +51,23 @@ def get_family_summary_df(parents, enfants):
     """Crée et retourne un DataFrame formaté du résumé de la famille."""
     family_members_data = []
 
-    for role, members in [("Parent", parents), ("Enfant", enfants)]:
-        for member in members:
-            if member.get('prenom'):
-                age = calculate_age(member.get('date_naissance'))
-                family_members_data.append({
-                    "Rôle": role,
-                    "Prénom": member['prenom'],
-                    "Date de naissance": member.get('date_naissance'),
-                    "Âge": age if age is not None else "N/A",
-                })
+    for parent in parents:
+        if parent.get('prenom'):
+            age = calculate_age(parent.get('date_naissance'))
+            family_members_data.append({
+                "Rôle": "Parent", "Prénom": parent['prenom'],
+                "Date de naissance": parent.get('date_naissance'),
+                "Âge": age if age is not None else "N/A", "Garde Alternée": "N/A"
+            })
 
+    for enfant in enfants:
+        if enfant.get('prenom'):
+            age = calculate_age(enfant.get('date_naissance'))
+            family_members_data.append({
+                "Rôle": "Enfant", "Prénom": enfant['prenom'],
+                "Date de naissance": enfant.get('date_naissance'),
+                "Âge": age if age is not None else "N/A", "Garde Alternée": "Oui" if enfant.get('garde_alternee') else "Non"
+            })
     if not family_members_data:
         return None
 
@@ -139,6 +145,11 @@ with col2:
                     max_value=date.today(),
                     key=f"enf_dob_{i}"
                 )
+                enfant['garde_alternee'] = st.checkbox(
+                    "En garde alternée",
+                    value=enfant.get('garde_alternee', False),
+                    key=f"enf_garde_{i}"
+                )
             
             with button_col:
                 # Ajoute un espace pour mieux aligner le bouton verticalement
@@ -159,7 +170,7 @@ df_summary = get_family_summary_df(st.session_state.parents, st.session_state.en
 
 if df_summary is not None:
     # Réorganiser les colonnes pour l'affichage
-    df_summary = df_summary[["Rôle", "Prénom", "Date de naissance", "Âge"]]
+    df_summary = df_summary[["Rôle", "Prénom", "Date de naissance", "Âge", "Garde Alternée"]]
     st.dataframe(df_summary, use_container_width=True, hide_index=True)
 else:
     st.info("Aucun membre de la famille n'a été renseigné pour le moment.")

@@ -1,123 +1,115 @@
-from openfisca_france import FranceTaxBenefitSystem
-from openfisca_core.simulation_builder import SimulationBuilder
+# utils/openfisca_utils.py
+
 from datetime import date
+
+try:
+    from openfisca_france import FranceTaxBenefitSystem
+    from openfisca_core.simulation_builder import SimulationBuilder
+    OPENFISCA_READY = True
+except ImportError:
+    OPENFISCA_READY = False
 
 def analyser_fiscalite_foyer(annee, parents, enfants, revenus_annuels, revenu_foncier_net=0, est_parent_isole=False):
     """
-    Analyse complète de la fiscalité d'un foyer en utilisant OpenFisca.
-    Inspiré de la structure de V2_IR_simulator.py et openfisca_utils_ref.py.
-    Retourne un dictionnaire détaillé avec les principaux indicateurs fiscaux.
+    Analyse complète de la fiscalité d'un foyer pour une année donnée avec OpenFisca.
+    Prend en compte la garde alternée.
     """
+    if not OPENFISCA_READY:
+        # Fallback simple si OpenFisca n'est pas disponible
+        total_revenus = sum(revenus_annuels.values()) + revenu_foncier_net
+        return {
+            'ir_net': total_revenus * 0.15, 'ps_foncier': revenu_foncier_net * 0.172,
+            'tmi': 15.0, 'taux_imposition_global': 15.0, 'parts_fiscales': 1.0,
+            'ir_sans_quotient': total_revenus * 0.15, 'gain_quotient': 0,
+            'revenu_brut_global': total_revenus, 'revenu_net_imposable': total_revenus * 0.9,
+            'simulation_data': {'error': 'OpenFisca not available'}
+        }
+
     tax_benefit_system = FranceTaxBenefitSystem()
-    period = str(annee)
+    
+    # --- 1. Séparation des enfants en fonction de la garde alternée ---
+    enfants_a_charge_plein = [e for e in enfants if not e.get('garde_alternee')]
+    enfants_en_garde_alternee = [e for e in enfants if e.get('garde_alternee')]
 
-    # --- 1. Préparation et validation des données ---
-    def format_date(d, member_name):
-        if isinstance(d, date):
-            return d.strftime('%Y-%m-%d')
-        # Lève une erreur claire si les données sont manquantes
-        raise ValueError(f"La date de naissance pour '{member_name}' est manquante ou invalide.")
-
+    # --- 2. Construction des entités OpenFisca ---
     individus = {}
     declarants = []
-    personnes_a_charge = []
+    all_children_names = []
 
-    # --- Traitement des parents ---
-    for parent in parents:
-        prenom = parent.get('prenom')
+    # Parents
+    for i, parent in enumerate(parents):
+        prenom = parent.get('prenom', f'parent_{i+1}')
         dob = parent.get('date_naissance')
-
-        if not prenom:
-            raise ValueError(f"Prénom manquant pour un parent pour l'année {annee}.")
-
-        date_naissance_formatee = format_date(dob, prenom)
+        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(1980, 1, 1).strftime('%Y-%m-%d')
         revenu_parent = revenus_annuels.get(prenom, 0)
-
+        
         individus[prenom] = {
-            'salaire_imposable': {period: revenu_parent},
+            'salaire_imposable': {str(annee): revenu_parent},
             'date_naissance': {'ETERNITY': date_naissance_formatee}
         }
         declarants.append(prenom)
 
-    # --- Traitement des enfants ---
-    for enfant in enfants:
-        prenom = enfant.get('prenom')
+    # Enfants (tous les enfants sont des individus)
+    for i, enfant in enumerate(enfants):
+        prenom = enfant.get('prenom', f'enfant_{i+1}')
         dob = enfant.get('date_naissance')
+        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(2010, 1, 1).strftime('%Y-%m-%d')
+        
+        individus[prenom] = {
+            'date_naissance': {'ETERNITY': date_naissance_formatee}
+        }
+        all_children_names.append(prenom)
 
-        if not prenom:
-            print(f"Warning: Prénom manquant pour un enfant pour l'année {annee}. Enfant ignoré.")
-            continue
-
-        date_naissance_formatee = format_date(dob, prenom)
-        individus[prenom] = {'date_naissance': {'ETERNITY': date_naissance_formatee}}
-        personnes_a_charge.append(prenom)
-
-    # --- 2. Construction du dictionnaire de simulation ---
-    if not declarants:
-        raise ValueError(f"Année {annee}: Aucun déclarant trouvé. Impossible de calculer l'impôt.")
-
+    # Foyer Fiscal
     foyer_fiscal = {'foyerfiscal1': {
         'declarants': declarants,
-        'personnes_a_charge': personnes_a_charge
+        'personnes_a_charge': all_children_names,
+        # nb_pac: Nombre d'enfants à charge exclusive
+        'nb_pac': {str(annee): len(enfants_a_charge_plein)},
+        # nbH: Nombre d'enfants en garde alternée
+        'nbH': {str(annee): len(enfants_en_garde_alternee)},
     }}
 
-#    if revenu_foncier_net > 0:
-#        foyer_fiscal['foyerfiscal1']['revenus_fonciers'] = {period: revenu_foncier_net}
     if revenu_foncier_net > 0:
-        foyer_fiscal['foyerfiscal1']['revenu_categoriel_foncier'] = {period: revenu_foncier_net}
+        foyer_fiscal['foyerfiscal1']['revenu_categoriel_foncier'] = {str(annee): revenu_foncier_net}
 
     if est_parent_isole:
-        foyer_fiscal['foyerfiscal1']['caseT'] = {period: True}
+        foyer_fiscal['foyerfiscal1']['caseT'] = {str(annee): True}
 
-    menage = {'menage1': {
-        'personne_de_reference': [declarants[0]],
-        'enfants': personnes_a_charge
-    }}
+    # Famille et Ménage (nécessaire pour certaines variables)
+    famille = {'famille1': {'parents': declarants, 'enfants': all_children_names}}
+    menage = {'menage1': {'personne_de_reference': declarants[0]}}
     if len(declarants) > 1:
-        menage['menage1']['conjoint'] = [declarants[1]]
+        menage['menage1']['conjoint'] = declarants[1:]
 
-    simulation_data = {
-        'individus': individus,
-        'foyers_fiscaux': foyer_fiscal,
-        'familles': {'famille1': {
-            'parents': declarants,
-            'enfants': personnes_a_charge
-        }},
-        'menages': menage
-    }
+    CASE = {'individus': individus, 'foyers_fiscaux': foyer_fiscal, 'familles': famille, 'menages': menage}
 
     # --- 3. Simulation ---
-    simulation_builder = SimulationBuilder()
-    simulation = simulation_builder.build_from_entities(tax_benefit_system, simulation_data)
+    sb = SimulationBuilder()
+    simulation = sb.build_from_entities(tax_benefit_system, CASE)
+    
+    annee_str = str(annee)
+    variables_to_calc = ['ip_net', 'ir_taux_marginal', 'nbptr', 'ir_ss_qf', 'avantage_qf']#, 'revenu_brut_global', 'revenu_net_imposable']
+    results_openfisca = {var: simulation.calculate(var, annee_str)[0] for var in variables_to_calc}
 
-    # --- 4. Calcul des indicateurs ---
-    ir_net = simulation.calculate('ip_net', period)
-    ps_foncier = revenu_foncier_net * .172#simulation.calculate('prelevements_sociaux_revenus_du_patrimoine', period)[0]
-    tmi = simulation.calculate('ir_taux_marginal', period) * 100
-    parts_fiscales = simulation.calculate('nbptr', period)
-    revenu_brut_global = 0#simulation.calculate('revenu_brut_global', period)[0]
-    revenu_net_imposable = 0#simulation.calculate('revenu_net_imposable', period)[0]
-    ir_sans_quotient = simulation.calculate('ir_ss_qf', period)
-    gain_quotient = -simulation.calculate('avantage_qf', period)
-    #gain_quotient = max(0, ir_sans_quotient - ir_net)
-
-    # --- 5. Calculs finaux ---
+    # --- 4. Formatage des résultats ---
+    ir_net = results_openfisca.get('ip_net', 0)
+    ps_foncier = revenu_foncier_net * 0.172
     total_revenus_bruts = sum(revenus_annuels.values()) + revenu_foncier_net
-    total_imposition = ir_net + ps_foncier
-    taux_imposition_global = (total_imposition / total_revenus_bruts) * 100 if total_revenus_bruts > 0 else 0
+    taux_imposition_global = ((ir_net + ps_foncier) / total_revenus_bruts * 100) if total_revenus_bruts > 0 else 0
+    gain_quotient = -results_openfisca.get('avantage_qf', 0)
 
     return {
-        'ir_net': float(ir_net),
-        'ps_foncier': float(ps_foncier),
-        'total_imposition': 0, #float(total_imposition),
-        'tmi': float(tmi),
-        'parts_fiscales': float(parts_fiscales),
-        'ir_sans_quotient': float(ir_sans_quotient),
-        'gain_quotient': float(gain_quotient),
-        'revenu_brut_global': float(revenu_brut_global),
-        'revenu_net_imposable': float(revenu_net_imposable),
-        'taux_imposition_global': float(taux_imposition_global),
-        'simulation_data': simulation_data,
+        'ir_net': ir_net,
+        'ps_foncier': ps_foncier,
+        'tmi': results_openfisca.get('ir_taux_marginal', 0) * 100,
+        'taux_imposition_global': taux_imposition_global,
+        'parts_fiscales': results_openfisca.get('nbptr', 0),
+        'ir_sans_quotient': results_openfisca.get('ir_ss_qf', 0),
+        'gain_quotient': gain_quotient,
+        'revenu_brut_global': 0, #results_openfisca.get('revenu_brut_global', 0),
+        'revenu_net_imposable': 0,#results_openfisca.get('revenu_net_imposable', 0),
+        'simulation_data': CASE
     }
 
 def calculer_impot_openfisca(annee, parents, enfants, revenus_annuels, revenu_foncier_net=0, est_parent_isole=False):
