@@ -73,11 +73,14 @@ flux_page = st.Page("pages/4_Flux.py", title="💸  Flux : revenus & dépenses")
 immobilier_page = st.Page("pages/3_Focus_Immobilier.py", title="🏘️ Focus Immobilier")#, icon=":material/house:")
 fiscalite_page = st.Page("pages/8_Focus_Fiscalite.py", title="🧐Focus Fiscalité")#, icon=":material/monetization_on:")
 projection_page = st.Page("pages/4_Projection.py", title="📈 Projection")#, icon=":material/calendar_today:")
+
+PER_page = st.Page("pages/9_Optimisation_PER.py", title="🎯 Optimisation PER")#, icon=":material/lightbulb:")
 #create_page = st.Page("pages/3_Flux.py", title="Delete entry", icon=":material/delete:")
 
 pg = st.navigation({'Fichier':[accueil_page,  load_save_page],
                    'Informations du Foyer': [famille_page, patrimoine_page, flux_page],
                    'Analyse': [immobilier_page, fiscalite_page],
-                   'Projection': [projection_page]})
+                   'Projection': [projection_page],
+                   'Solutions': [PER_page]})
 #st.set_page_config(page_title="Data manager", page_icon=":material/edit:")
 pg.run()

@@ -24,7 +24,7 @@ from core.patrimoine_logic import (
     calculate_lmnp_amortissement_annuel
 ) 
 
-def calculate_property_metrics(asset, passifs, tmi, social_tax):
+def calculate_property_metrics(asset, passifs, tmi, social_tax, year_of_analysis):
     """Calcule toutes les métriques de performance pour un bien immobilier."""
     metrics = {}
     
@@ -43,18 +43,18 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax):
         metrics['amortissement_annuel_potentiel'] = amortissement_info['total']
     
     # 3. Calculer l'impôt et la rentabilité nette de fiscalité
-    tax_info = calculate_property_tax(asset, loans, tmi, social_tax, amortissement_annuel_utilise=metrics['amortissement_annuel_potentiel'])
+    tax_info = calculate_property_tax(asset, loans, tmi, social_tax, amortissement_annuel_utilise=metrics['amortissement_annuel_potentiel'], year=year_of_analysis)
     metrics['tax_info'] = tax_info
     metrics['net_yield_after_tax'] = calculate_net_yield_tax(asset, tax_info['total'])
 
     # 4. Calculer l'effort d'épargne mensuel (cash-flow)
-    savings_effort = calculate_savings_effort(asset, loans, tax_info['total'])
+    savings_effort = calculate_savings_effort(asset, loans, tax_info['total'], year=year_of_analysis)
     metrics['savings_effort'] = savings_effort
     metrics['cash_flow_annuel'] = savings_effort * 12
 
     # 5. Calculs pour le graphique en cascade et les indicateurs clés
-    metrics['capital_rembourse_annuel'] = sum(calculate_loan_annual_breakdown(l).get('capital', 0) for l in loans)
-    metrics['interets_annuels'] = sum(calculate_loan_annual_breakdown(l).get('interest', 0) for l in loans)
+    metrics['capital_rembourse_annuel'] = sum(calculate_loan_annual_breakdown(l, year=year_of_analysis).get('capital', 0) for l in loans)
+    metrics['interets_annuels'] = sum(calculate_loan_annual_breakdown(l, year=year_of_analysis).get('interest', 0) for l in loans)
 
     metrics['loyers_annuels'] = asset.get('loyers_mensuels', 0) * 12
     metrics['charges_annuelles'] = asset.get('charges', 0) * 12
@@ -81,7 +81,7 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax):
 
     return metrics
 
-def _create_waterfall_fig(metrics, is_lmnp=False):
+def _create_waterfall_fig(metrics, year_of_analysis, is_lmnp=False):
     """Crée le graphique en cascade pour une location nue ou meublée."""
     # Définir le libellé final en fonction du résultat pour plus de clarté
     final_label = "Cash-flow Net Annuel"
@@ -170,14 +170,14 @@ def _create_waterfall_fig(metrics, is_lmnp=False):
     if y_padding == 0:  # Cas où toutes les valeurs sont nulles
         y_padding = 1000  # Une valeur par défaut pour créer un peu d'espace
 
-    fig.update_layout(title="Décomposition du Cash-flow Annuel", showlegend=False, yaxis_title="Montant (€)", title_font_size=18, xaxis_tickfont_size=16, yaxis_range=[min_y - y_padding, max_y + y_padding])
+    fig.update_layout(title=f"Décomposition du Cash-flow pour l'année {year_of_analysis}", showlegend=False, yaxis_title="Montant (€)", title_font_size=18, xaxis_tickfont_size=16, yaxis_range=[min_y - y_padding, max_y + y_padding])
 
     return fig
 
-def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projection_duration):
+def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projection_duration, selected_year):
     """Affiche les métriques de rentabilité pré-calculées pour un bien immobilier."""
 
-    with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')}", expanded=True):
+    with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')} (Année {selected_year})", expanded=True):
         # --- Affichage des métriques principales ---
         main_cols = st.columns(5 if asset.get('mode_exploitation') == 'Location Meublée' else 4)
 
@@ -221,7 +221,7 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
         st.markdown("---")
         
         is_lmnp = asset.get('mode_exploitation') == 'Location Meublée'
-        fig = _create_waterfall_fig(metrics, is_lmnp=is_lmnp)
+        fig = _create_waterfall_fig(metrics, selected_year, is_lmnp=is_lmnp)
         st.plotly_chart(fig, use_container_width=True)
 
         # --- Métriques de synthèse post-graphique ---
@@ -262,9 +262,9 @@ def display_property_analysis(asset, metrics, passifs, tmi, social_tax, projecti
                 fig_amortissement = create_amortissement_projection_fig(df_projection)
                 st.plotly_chart(fig_amortissement, use_container_width=True)
 
-def display_non_productive_analysis(asset, passifs):
-    """Affiche l'analyse du coût de possession pour un bien de jouissance."""
-    with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')}", expanded=True):
+def display_non_productive_analysis(asset, passifs, selected_year):
+    """Affiche l'analyse du coût de possession pour un bien de jouissance pour une année donnée."""
+    with st.expander(f"Analyse de : {asset.get('libelle', 'Sans nom')} (Année {selected_year})", expanded=True):
         # 1. Trouver le prêt associé
         loans = find_associated_loans(asset.get('id'), passifs)
 
@@ -273,8 +273,8 @@ def display_non_productive_analysis(asset, passifs):
         taxe_fonciere = asset.get('taxe_fonciere', 0)
         
         # Agréger les données de tous les prêts
-        interets_annuels = sum(calculate_loan_annual_breakdown(l).get('interest', 0) for l in loans)
-        capital_rembourse_annuel = sum(calculate_loan_annual_breakdown(l).get('capital', 0) for l in loans)
+        interets_annuels = sum(calculate_loan_annual_breakdown(l, year=selected_year).get('interest', 0) for l in loans)
+        capital_rembourse_annuel = sum(calculate_loan_annual_breakdown(l, year=selected_year).get('capital', 0) for l in loans)
 
         cout_charges_taxes = charges_annuelles + taxe_fonciere
         cout_possession_annuel = cout_charges_taxes + interets_annuels
@@ -341,7 +341,7 @@ def display_non_productive_analysis(asset, passifs):
             connector = {"line":{"color":"rgb(63, 63, 63)"}},
         ))
 
-        fig.update_layout(title="Décomposition du Décaissement Annuel", showlegend=False, yaxis_title="Montant (€)")
+        fig.update_layout(title=f"Décomposition du Décaissement pour l'année {selected_year}", showlegend=False, yaxis_title="Montant (€)")
         st.plotly_chart(fig, use_container_width=True)
 
 def generate_projection_data(asset, loans, tmi_pct, social_tax_pct, projection_duration):
@@ -559,10 +559,11 @@ if 'immo_tmi' not in st.session_state:
 if 'immo_projection_duration' not in st.session_state:
     st.session_state.immo_projection_duration = 10
 
-st.session_state.immo_tmi = st.sidebar.select_slider(
+st.session_state.immo_tmi = st.sidebar.selectbox(
     "Votre Taux Marginal d'Imposition (TMI)",
     options=[0, 11, 30, 41, 45],
-    value=st.session_state.immo_tmi,
+    #value=st.session_state.immo_tmi,
+    index=[0, 11, 30, 41, 45].index(int(st.session_state.immo_tmi)),
     help="Le TMI est le taux d'imposition qui s'applique à la dernière tranche de vos revenus."
 )
 social_tax = 17.2 # Taux des prélèvements sociaux
@@ -573,6 +574,14 @@ st.sidebar.header("Paramètres de Projection")
 projection_duration = st.sidebar.number_input(
     "Durée de la projection (ans)",
     min_value=1, max_value=40, value=10, step=1
+)
+
+start_year = date.today().year
+analysis_years = list(range(start_year, start_year + projection_duration + 1))
+selected_year = st.sidebar.selectbox(
+    "Année d'analyse pour les métriques",
+    options=analysis_years,
+    index=0
 )
 
 st.markdown("---")
@@ -586,8 +595,8 @@ if productive_assets:
     for asset in productive_assets:
         # Vérifier que les données nécessaires sont présentes
         if asset.get('loyers_mensuels') is not None:
-            metrics = calculate_property_metrics(asset, passifs, st.session_state.immo_tmi, social_tax)
-            display_property_analysis(asset, metrics, passifs, st.session_state.immo_tmi, social_tax, projection_duration)
+            metrics = calculate_property_metrics(asset, passifs, st.session_state.immo_tmi, social_tax, selected_year)
+            display_property_analysis(asset, metrics, passifs, st.session_state.immo_tmi, social_tax, projection_duration, selected_year)
         else:
             st.warning(f"Les données de loyers pour **{asset.get('libelle')}** ne sont pas renseignées dans la page Patrimoine.")
 
@@ -597,4 +606,4 @@ if non_productive_assets:
     st.subheader("Biens Immobiliers de Jouissance")
     st.info("Cette section affiche les biens qui ne génèrent pas de revenus locatifs, comme votre résidence principale. Le graphique ci-dessous détaille le coût de possession annuel.")
     for asset in non_productive_assets:
-        display_non_productive_analysis(asset, passifs)
+        display_non_productive_analysis(asset, passifs, selected_year)

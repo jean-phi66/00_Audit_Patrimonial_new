@@ -183,11 +183,14 @@ annee_simulation = st.sidebar.number_input("Année d'imposition", min_value=2020
 
 # Détection automatique du parent isolé, avec possibilité de forcer
 is_single_parent_auto = len(parents) == 1 and len(enfants) > 0
-est_parent_isole = st.sidebar.checkbox(
-    "Cocher la case T (Parent isolé)", 
-    value=is_single_parent_auto,
-    help="Cochez cette case si vous êtes célibataire, divorcé(e), séparé(e) ou veuf(ve) et que vous vivez seul(e) avec vos enfants à charge."
-)
+if is_single_parent_auto:
+    est_parent_isole = st.sidebar.checkbox(
+        "Cocher la case T (Parent isolé)", 
+        value=is_single_parent_auto,
+        help="Cochez cette case si vous êtes célibataire, divorcé(e), séparé(e) ou veuf(ve) et que vous vivez seul(e) avec vos enfants à charge."
+    )
+else:
+    est_parent_isole = False
 
 revenu_max_graphique = st.sidebar.number_input(
     "Revenu maximum pour les graphiques", 
