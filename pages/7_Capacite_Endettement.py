@@ -242,54 +242,54 @@ def display_loan_simulator(remaining_capacity):
 
 # --- Exécution Principale ---
 
-def main():
-    st.title("🏦 Capacité d'Endettement")
-    st.markdown("Cette page analyse votre capacité à contracter de nouveaux prêts en fonction de vos revenus et de vos charges de crédits existantes.")
+#def main():
+st.title("🏦 Capacité d'Endettement")
+st.markdown("Cette page analyse votre capacité à contracter de nouveaux prêts en fonction de vos revenus et de vos charges de crédits existantes.")
 
-    # Vérification des données
-    if 'revenus' not in st.session_state or 'passifs' not in st.session_state:
-        st.warning("⚠️ Veuillez d'abord renseigner vos revenus (page **4_Flux**) et vos passifs (page **2_Patrimoine**).")
-        st.stop()
+# Vérification des données
+if 'revenus' not in st.session_state or 'passifs' not in st.session_state:
+    st.warning("⚠️ Veuillez d'abord renseigner vos revenus (page **4_Flux**) et vos passifs (page **2_Patrimoine**).")
+    st.stop()
 
-    # --- Paramètres ---
-    st.sidebar.header("Paramètres de Calcul")
-    max_debt_ratio = st.sidebar.radio(
-        "Taux d'endettement maximum",
-        options=[35, 40],
-        format_func=lambda x: f"{x} %",
-        index=0,
-        help="Le taux d'endettement maximum autorisé par les banques. La norme est de 35%."
-    )
+# --- Paramètres ---
+st.sidebar.header("Paramètres de Calcul")
+max_debt_ratio = st.sidebar.radio(
+    "Taux d'endettement maximum",
+    options=[35, 40],
+    format_func=lambda x: f"{x} %",
+    index=0,
+    help="Le taux d'endettement maximum autorisé par les banques. La norme est de 35%."
+)
 
-    # --- Calculs ---
-    revenus = st.session_state.get('revenus', [])
-    passifs = st.session_state.get('passifs', [])
+# --- Calculs ---
+revenus = st.session_state.get('revenus', [])
+passifs = st.session_state.get('passifs', [])
 
-    weighted_income_data = calculate_weighted_income(revenus)
-    debt_data = calculate_current_debt_service(passifs)
-    total_weighted_income = weighted_income_data["total"]
-    total_current_debt = debt_data["total"]
+weighted_income_data = calculate_weighted_income(revenus)
+debt_data = calculate_current_debt_service(passifs)
+total_weighted_income = weighted_income_data["total"]
+total_current_debt = debt_data["total"]
 
-    # --- Affichage ---
-    with st.expander("Détail des revenus pris en compte", expanded=False):
-        st.markdown(f"""
-        - **Salaires totaux :** `{weighted_income_data["salaires"]:,.2f} €` (pris à 100%)
-        - **Loyers bruts totaux :** `{weighted_income_data["loyers_bruts"]:,.2f} €`
-        - **Loyers pondérés (70%) :** `{weighted_income_data["loyers_ponderes"]:,.2f} €`
-        - **Total des revenus pondérés :** `{total_weighted_income:,.2f} €`
-        
-        *Les "Autres revenus" ne sont pas pris en compte dans ce calcul.*
-        """)
+# --- Affichage ---
+with st.expander("Détail des revenus pris en compte", expanded=False):
+    st.markdown(f"""
+    - **Salaires totaux :** `{weighted_income_data["salaires"]:,.2f} €` (pris à 100%)
+    - **Loyers bruts totaux :** `{weighted_income_data["loyers_bruts"]:,.2f} €`
+    - **Loyers pondérés (70%) :** `{weighted_income_data["loyers_ponderes"]:,.2f} €`
+    - **Total des revenus pondérés :** `{total_weighted_income:,.2f} €`
+    
+    *Les "Autres revenus" ne sont pas pris en compte dans ce calcul.*
+    """)
 
-    remaining_capacity = display_results(total_weighted_income, total_current_debt, max_debt_ratio)
+remaining_capacity = display_results(total_weighted_income, total_current_debt, max_debt_ratio)
 
-    if remaining_capacity is not None:
-        st.markdown("---")
-        display_debt_ratio_breakdown_chart(debt_data["details"], total_weighted_income, max_debt_ratio)
+if remaining_capacity is not None:
+    st.markdown("---")
+    display_debt_ratio_breakdown_chart(debt_data["details"], total_weighted_income, max_debt_ratio)
 
-        st.markdown("---")
-        display_loan_simulator(remaining_capacity)
+    st.markdown("---")
+    display_loan_simulator(remaining_capacity)
 
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()

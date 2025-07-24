@@ -369,7 +369,7 @@ def display_income_comparison_ui(total_revenus_mensuels, depenses, capacite_epar
 
     decile_atteint = next((label for label, value in sorted(INSEE_DECILES_2021.items(), key=lambda item: item[1], reverse=True) if niveau_de_vie_foyer >= value), None)
     if decile_atteint:
-        st.success(f"🎉 Félicitations ! Votre niveau de vie vous place au-dessus du **{decile_atteint}** des foyers français.")
+        st.success(f"Votre niveau de vie vous place au-dessus du **{decile_atteint}** des foyers français.")
     else:
         st.info("Votre niveau de vie se situe dans le premier décile des foyers français.")
 

@@ -65,6 +65,7 @@ page_config = OrderedDict({
 
 accueil_page = st.Page("pages/0_Accueil.py", title="👋🏽 Accueil")#, icon=":material/home:")
 load_save_page = st.Page("pages/5_Sauvegarde_et_Chargement.py", title="💾 Sauvegarde et chargement")#, icon=":material/save:")
+report_page = st.Page("pages/6_Rapport.py", title="📄 Rapport PDF")#, icon=":material/article:")
 
 famille_page = st.Page("pages/1_Famille.py", title="🧑‍🧑‍🧒‍🧒 Composition du foyer")#, icon=":material/group:")#, icon=":material/add_circle:")
 patrimoine_page = st.Page("pages/2_Patrimoine.py", title="💰 Description du patrimoine")#, icon=":material/attach_money:")
@@ -72,14 +73,15 @@ flux_page = st.Page("pages/4_Flux.py", title="💸  Flux : revenus & dépenses")
 
 immobilier_page = st.Page("pages/3_Focus_Immobilier.py", title="🏘️ Focus Immobilier")#, icon=":material/house:")
 fiscalite_page = st.Page("pages/8_Focus_Fiscalite.py", title="🧐Focus Fiscalité")#, icon=":material/monetization_on:")
+endettement_page = st.Page("pages/7_Capacite_Endettement.py", title="🏦 Capacité d'endettement")#, icon=":material/assessment:")
 projection_page = st.Page("pages/4_Projection.py", title="📈 Projection")#, icon=":material/calendar_today:")
 
 PER_page = st.Page("pages/9_Optimisation_PER.py", title="🎯 Optimisation PER")#, icon=":material/lightbulb:")
 #create_page = st.Page("pages/3_Flux.py", title="Delete entry", icon=":material/delete:")
 
-pg = st.navigation({'Fichier':[accueil_page,  load_save_page],
+pg = st.navigation({'Fichier':[accueil_page,  load_save_page, report_page],
                    'Informations du Foyer': [famille_page, patrimoine_page, flux_page],
-                   'Analyse': [immobilier_page, fiscalite_page],
+                   'Analyse': [immobilier_page, fiscalite_page, endettement_page],
                    'Projection': [projection_page],
                    'Solutions': [PER_page]})
 #st.set_page_config(page_title="Data manager", page_icon=":material/edit:")

@@ -220,7 +220,6 @@ if not revenus_salaires:
     st.stop()
 
 st.sidebar.header("Paramètres de l'optimisation PER")
-annee_simulation = st.sidebar.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year, key="per_annee")
 is_single_parent_auto = len(parents) == 1 and len(enfants) > 0
 if is_single_parent_auto:
     est_parent_isole = st.sidebar.checkbox("Cocher la case T (Parent isolé)", value=is_single_parent_auto, key="per_isole")
@@ -229,10 +228,10 @@ else:
 input_plafond_PER = st.sidebar.number_input("Votre Plafond PER disponible (€)", value=10000, step=100, min_value=0)
 input_ir_residuel_min = st.sidebar.number_input("IR résiduel minimum souhaité (€)", value=0, step=100, min_value=0, help="L'optimisation ne cherchera pas à faire baisser l'impôt en dessous de ce montant.")
 
-st.sidebar.markdown("---")
 run_simulation = st.sidebar.button("🚀 Lancer la simulation PER", use_container_width=True, type="primary")
 
-with st.sidebar.expander("Options"):
+with st.sidebar.expander("Options", expanded=False):
+    annee_simulation = st.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year, key="per_annee")
     input_revenu_max_simu = st.number_input("Revenu max. pour les graphiques (€)", value=max(150000, int(total_salary * 1.2)), step=1000, min_value=int(total_salary))
 
 if run_simulation:

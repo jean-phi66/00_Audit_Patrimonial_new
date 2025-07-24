@@ -343,9 +343,7 @@ def analyser_optimisation_per(annee, parents, enfants, revenus_annuels, revenu_f
 
     axis_count_per = int(total_salary / step) if step > 0 else 1
     if axis_count_per > 0:
-        case_per_sim['axes'] = [[{'count': axis_count_per, 'name': 'f6rs', 'min': 0, 'max': total_salary, 'period': annee_str}]]
-        print(case_per_sim)
-        
+        case_per_sim['axes'] = [[{'count': axis_count_per, 'name': 'f6rs', 'min': 0, 'max': total_salary, 'period': annee_str}]]        
         sb_per = SimulationBuilder()
         sim_per = sb_per.build_from_entities(tax_benefit_system, case_per_sim)
         versement_per_axis = sim_per.calculate_add('f6rs', annee_str).reshape(axis_count_per, n_individus)[:, :len(declarants)].sum(axis=1)
