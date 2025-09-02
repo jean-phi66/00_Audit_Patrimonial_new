@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import importlib
 
-from core.report_generator import generate_report_safe
+from core.report_generator import generate_report_safe, generate_word_report_safe
 
 # --- Vérification de la disponibilité des modules et fonctions ---
 
@@ -23,8 +23,12 @@ def import_from(module_name, func_name):
         return None, False
 
 # --- Fonctions importées des autres pages ---
-generate_immo_projection_data, FOCUS_IMMO_AVAILABLE = import_from("3_Focus_Immobilier", "generate_projection_data")
+calculate_property_metrics, FOCUS_IMMO_AVAILABLE = import_from("3_Focus_Immobilier", "calculate_property_metrics")
+_create_waterfall_fig, _ = import_from("3_Focus_Immobilier", "_create_waterfall_fig")
+generate_immo_projection_data, _ = import_from("3_Focus_Immobilier", "generate_projection_data")
 create_cash_flow_projection_fig, _ = import_from("3_Focus_Immobilier", "create_cash_flow_projection_fig")
+create_leverage_projection_fig, _ = import_from("3_Focus_Immobilier", "create_leverage_projection_fig")
+create_amortissement_projection_fig, _ = import_from("3_Focus_Immobilier", "create_amortissement_projection_fig")
 
 calculate_weighted_income, CAP_ENDETTEMENT_AVAILABLE = import_from("7_Capacite_Endettement", "calculate_weighted_income")
 calculate_current_debt_service, _ = import_from("7_Capacite_Endettement", "calculate_current_debt_service")
@@ -39,6 +43,7 @@ simuler_evolution_fiscalite, _ = import_from("8_Focus_Fiscalite", "simuler_evolu
 display_income_evolution_chart, _ = import_from("8_Focus_Fiscalite", "display_income_evolution_chart")
 
 analyser_optimisation_per, OPTIMISATION_PER_AVAILABLE = import_from("9_Optimisation_PER", "analyser_optimisation_per")
+create_base_tax_evolution_fig_per, _ = import_from("9_Optimisation_PER", "create_base_tax_evolution_fig")
 
 # --- Vérification des dépendances critiques ---
 try:
@@ -52,6 +57,14 @@ try:
     OPENFISCA_AVAILABLE = True
 except ImportError:
     OPENFISCA_AVAILABLE = False
+
+# --- Sidebar pour le format ---
+st.sidebar.header("Format du Rapport")
+report_format = st.sidebar.radio(
+    "Choisissez le format de sortie",
+    ("PDF", "Word (.docx)"),
+    key="report_format"
+)
 
 # --- Interface Streamlit ---
 
@@ -89,7 +102,7 @@ with cols[1]:
 
 st.markdown("---")
 
-if st.sidebar.button("🚀 Générer mon rapport PDF", use_container_width=True, type="primary"):
+if st.button(f"🚀 Générer mon rapport {report_format}", use_container_width=True, type="primary"):
     with st.spinner("Création du rapport en cours..."):
         # --- Récupération de toutes les données et paramètres nécessaires ---
         parents = st.session_state.get('parents', [])
@@ -115,8 +128,12 @@ if st.sidebar.button("🚀 Générer mon rapport PDF", use_container_width=True,
         # Dictionnaire des fonctions et disponibilités à passer au générateur
         funcs = {
             'FOCUS_IMMO_AVAILABLE': FOCUS_IMMO_AVAILABLE,
+            'calculate_property_metrics': calculate_property_metrics,
+            '_create_waterfall_fig': _create_waterfall_fig,
             'generate_immo_projection_data': generate_immo_projection_data,
             'create_cash_flow_projection_fig': create_cash_flow_projection_fig,
+            'create_leverage_projection_fig': create_leverage_projection_fig,
+            'create_amortissement_projection_fig': create_amortissement_projection_fig,
             'CAP_ENDETTEMENT_AVAILABLE': CAP_ENDETTEMENT_AVAILABLE,
             'calculate_weighted_income': calculate_weighted_income,
             'calculate_current_debt_service': calculate_current_debt_service,
@@ -129,24 +146,39 @@ if st.sidebar.button("🚀 Générer mon rapport PDF", use_container_width=True,
             'simuler_evolution_fiscalite': simuler_evolution_fiscalite,
             'display_income_evolution_chart': display_income_evolution_chart,
             'OPTIMISATION_PER_AVAILABLE': OPTIMISATION_PER_AVAILABLE,
+            'create_base_tax_evolution_fig_per': create_base_tax_evolution_fig_per,
             'analyser_optimisation_per': analyser_optimisation_per,
             'OPENFISCA_AVAILABLE': OPENFISCA_AVAILABLE
         }
 
-        # Génération du rapport
-        pdf_data, pdf_error = generate_report_safe(selections, parents, enfants, actifs, passifs, revenus, depenses, per_results, settings, funcs)
-        
         # Création du nom de fichier dynamique
         client_name = parents[0].get('prenom', 'client') if parents else 'client'
-        file_name = f"Rapport_Patrimonial_{client_name}_{date.today().strftime('%Y-%m-%d')}.pdf"
-        if pdf_error:
-            st.error(pdf_error)
-        else:
-            with cols[0]:
-                st.success("✅ Rapport généré avec succès !")
-                st.sidebar.download_button(
+        base_file_name = f"Rapport_Patrimonial_{client_name}_{date.today().strftime('%Y-%m-%d')}"
+
+        if report_format == "PDF":
+            pdf_data, error = generate_report_safe(selections, parents, enfants, actifs, passifs, revenus, depenses, per_results, settings, funcs)
+            if error:
+                st.error(error)
+            else:
+                st.success("✅ Rapport PDF généré avec succès !")
+                st.download_button(
                     label="📥 Télécharger le rapport PDF",
                     data=pdf_data,
-                    file_name=file_name,
+                    file_name=f"{base_file_name}.pdf",
                     mime="application/pdf",
-                    use_container_width=False)
+                    use_container_width=True)
+        
+        elif report_format == "Word (.docx)":
+            word_data, error = generate_word_report_safe(selections, parents, enfants, actifs, passifs, revenus, depenses, per_results, settings, funcs)
+            if error:
+                st.error(error)
+            else:
+                st.success("✅ Rapport Word (.docx) généré avec succès !")
+                st.download_button(
+                    label="📥 Télécharger le rapport Word",
+                    data=word_data,
+                    file_name=f"{base_file_name}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True)
+        else:
+            st.error("Format de rapport non reconnu.")

@@ -12,6 +12,9 @@ if project_root not in sys.path:
 
 from core.patrimoine_logic import calculate_monthly_payment
 
+# --- Constantes de calcul ---
+RENTAL_INCOME_WEIGHT = 0.70 # Pondération des revenus locatifs par les banques
+
 # --- Fonctions de calcul ---
 
 def calculate_weighted_income(revenus):
@@ -33,7 +36,7 @@ def calculate_weighted_income(revenus):
             salaire_total += montant
         elif revenu.get('type') == 'Patrimoine':
             loyers_bruts += montant
-            weighted_amount = montant * 0.70
+            weighted_amount = montant * RENTAL_INCOME_WEIGHT
             total_weighted_income += weighted_amount
             loyers_ponderes += weighted_amount
     
@@ -275,7 +278,7 @@ with st.expander("Détail des revenus pris en compte", expanded=False):
     st.markdown(f"""
     - **Salaires totaux :** `{weighted_income_data["salaires"]:,.2f} €` (pris à 100%)
     - **Loyers bruts totaux :** `{weighted_income_data["loyers_bruts"]:,.2f} €`
-    - **Loyers pondérés (70%) :** `{weighted_income_data["loyers_ponderes"]:,.2f} €`
+    - **Loyers pondérés ({RENTAL_INCOME_WEIGHT:.0%}) :** `{weighted_income_data["loyers_ponderes"]:,.2f} €`
     - **Total des revenus pondérés :** `{total_weighted_income:,.2f} €`
     
     *Les "Autres revenus" ne sont pas pris en compte dans ce calcul.*

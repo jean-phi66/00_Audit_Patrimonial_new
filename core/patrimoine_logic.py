@@ -239,13 +239,31 @@ def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None, amo
     interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=year).get('interest', 0) for l in loans)
 
     charges_deductibles = charges_annuelles + taxe_fonciere + interets_emprunt
-    revenu_foncier_imposable = max(0, loyers_annuels - charges_deductibles - amortissement_annuel_utilise)
+
+    # --- Spécificité Scellier Intermédiaire : abattement de 30% sur les loyers ---
+    is_scellier_inter = asset.get('dispositif_fiscal', '') == 'Scellier Intermediaire'
+    abattement_scellier_inter = 0.0
+    loyers_abattus = loyers_annuels
+
+    if is_scellier_inter:
+        annee_debut = asset.get('annee_debut_dispositif')
+        duree = asset.get('duree_dispositif')
+        if annee_debut and duree and (annee_debut <= year < annee_debut + duree):
+            abattement_scellier_inter = 0.3
+            loyers_abattus = loyers_annuels * (1 - abattement_scellier_inter)
+        else:
+            abattement_scellier_inter = 0.0
+            loyers_abattus = loyers_annuels
+
+    revenu_foncier_imposable = max(0, loyers_abattus - charges_deductibles - amortissement_annuel_utilise)
     
     impot_sur_revenu = revenu_foncier_imposable * (tmi_pct / 100)
     prelevements_sociaux = revenu_foncier_imposable * (social_tax_pct / 100)
 
-    # --- Calcul de la réduction d'impôt (Pinel) ---
+    # --- Calcul de la réduction d'impôt (Pinel & Scellier) ---
     reduction_pinel = 0
+    reduction_scellier = 0
+    # Pinel
     if asset.get('dispositif_fiscal') == 'Pinel':
         annee_debut = asset.get('annee_debut_dispositif')
         duree = asset.get('duree_dispositif')
@@ -265,13 +283,68 @@ def calculate_property_tax(asset, loans, tmi_pct, social_tax_pct, year=None, amo
             
             reduction_pinel = base_calcul * taux_reduction_annuel
 
-    total_impot = impot_sur_revenu + prelevements_sociaux - reduction_pinel
-    
+    # Scellier (classique et intermédiaire)
+    if asset.get('dispositif_fiscal', '').startswith('Scellier'):
+        annee_debut = asset.get('annee_debut_dispositif')
+        duree = asset.get('duree_dispositif')
+        scellier_type = asset.get('dispositif_fiscal')  # 'Scellier' ou 'Scellier Intermediaire'
+        print(f"[DEBUG Scellier] Année: {year}, annee_debut: {annee_debut}, duree: {duree}, type: {scellier_type}")
+        if annee_debut and duree and (annee_debut <= year < annee_debut + duree):
+            base_calcul = min(asset.get('valeur', 0), 300000)
+            annees_ecoulees = year - annee_debut
+            print(f"[DEBUG Scellier] base_calcul: {base_calcul}, annees_ecoulees: {annees_ecoulees}")
+            # Barèmes principaux (hors DOM, hors BBC, hors majorations spécifiques)
+            if scellier_type == 'Scellier':
+                if annee_debut in [2009, 2010]:
+                    taux_total = 0.25
+                elif annee_debut == 2011:
+                    taux_total = 0.20
+                elif annee_debut == 2012:
+                    taux_total = 0.13
+                else:
+                    taux_total = 0
+                print(f"[DEBUG Scellier] taux_total (classique): {taux_total}")
+                # 9 premières années
+                if duree >= 9 and annees_ecoulees < 9:
+                    reduction_scellier = base_calcul * taux_total / 9
+                    print(f"[DEBUG Scellier] reduction_scellier (classique, 0-9): {reduction_scellier}")
+                # Années 10 à 15 (prorogation possible)
+                elif duree >= 15 and 9 <= annees_ecoulees < 15:
+                    # 2%/an de la base sur 6 ans supplémentaires (soit 12% au total)
+                    reduction_scellier = base_calcul * 0.02
+                    print(f"[DEBUG Scellier] reduction_scellier (classique, 10-15): {reduction_scellier}")
+            elif scellier_type == 'Scellier Intermediaire':
+                if annee_debut in [2009, 2010]:
+                    taux_total = 0.27
+                elif annee_debut == 2011:
+                    taux_total = 0.23
+                elif annee_debut == 2012:
+                    taux_total = 0.17
+                else:
+                    taux_total = 0
+                print(f"[DEBUG Scellier] taux_total (intermediaire): {taux_total}")
+                # 9 premières années
+                if duree >= 9 and annees_ecoulees < 9:
+                    reduction_scellier = base_calcul * taux_total / 9
+                    print(f"[DEBUG Scellier] reduction_scellier (intermediaire, 0-9): {reduction_scellier}")
+                # Années 10 à 15 (prorogation possible)
+                elif duree >= 15 and 9 <= annees_ecoulees < 15:
+                    # 2%/an de la base sur 6 ans supplémentaires (soit 12% au total)
+                    reduction_scellier = base_calcul * 0.02
+                    print(f"[DEBUG Scellier] reduction_scellier (intermediaire, 10-15): {reduction_scellier}")
+            # Pas de prorogation prise en compte ici (uniquement 9 ou 15 ans)
+        else:
+            print("[DEBUG Scellier] Conditions non remplies pour réduction Scellier")
+
+    total_impot = impot_sur_revenu + prelevements_sociaux - reduction_pinel - reduction_scellier
+    print(f"[DEBUG Scellier] total_impot: {total_impot}, reduction_pinel: {reduction_pinel}, reduction_scellier: {reduction_scellier}")
+
     return {
         'total': total_impot,
         'ir': impot_sur_revenu,
         'ps': prelevements_sociaux,
-        'reduction_pinel': reduction_pinel
+        'reduction_pinel': reduction_pinel,
+        'reduction_scellier': reduction_scellier
     }
 
 def calculate_net_yield_tax(asset, total_annual_tax):

@@ -12,7 +12,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from core.patrimoine_logic import find_associated_loans, calculate_loan_annual_breakdown
+from core.fiscal_logic import get_revenus_imposables
 
 try:
     from utils.openfisca_utils import analyser_optimisation_per, add_bracket_lines_to_fig
@@ -25,29 +25,12 @@ def format_space_thousand_sep(num, trailing=" €"):
     """Formats a number with spaces as thousand separators."""
     return '{:,}'.format(np.round(num, 0)).replace(',', ' ') + trailing
 
-def get_revenus_imposables():
-    """Calcule les revenus imposables à partir des données de l'application."""
-    revenus_salaires = {}
-    for revenu in st.session_state.get('revenus', []):
-        if revenu.get('type') == 'Salaire':
-            prenom = revenu['libelle'].split(' ')[1]
-            revenus_salaires[prenom] = revenu.get('montant', 0) * 12
-
-    total_loyers_bruts_annee, total_charges_deductibles_annee = 0, 0
-    passifs = st.session_state.get('passifs', [])
-    actifs_productifs = [a for a in st.session_state.get('actifs', []) if a.get('type') == 'Immobilier productif']
-
-    for asset in actifs_productifs:
-        loyers_annuels = asset.get('loyers_mensuels', 0) * 12
-        charges_annuelles = asset.get('charges', 0) * 12
-        taxe_fonciere = asset.get('taxe_fonciere', 0)
-        loans = find_associated_loans(asset.get('id'), passifs)
-        interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=date.today().year).get('interest', 0) for l in loans)
-        total_loyers_bruts_annee += loyers_annuels
-        total_charges_deductibles_annee += (charges_annuelles + taxe_fonciere + interets_emprunt)
-
-    revenu_foncier_net = max(0, total_loyers_bruts_annee - total_charges_deductibles_annee)
-    return revenus_salaires, revenu_foncier_net
+def create_base_tax_evolution_fig(results):
+    """Crée la figure de base de l'évolution de l'impôt avec les tranches."""
+    fig = px.line(results['df_income_tax_evol'], x='Revenu', y='IR', labels={'Revenu': 'Revenu net imposable', 'IR': "Montant de l'IR"})
+    add_bracket_lines_to_fig(fig, results['df_income_tax_evol'], results['bareme_annee_simulation'])
+    fig.update_layout(xaxis_ticksuffix='€', yaxis_ticksuffix='€', xaxis_range=[0, results['length_simu']])
+    return fig
 
 def display_one_shot_tab(results, salary):
     """Affiche l'onglet 'Synthèse de l'impôt'."""
@@ -82,10 +65,8 @@ def display_one_shot_tab(results, salary):
 
     st.divider()
     st.subheader("Évolution de l'impôt selon le revenu")
-    fig = px.line(results['df_income_tax_evol'], x='Revenu', y='IR', labels={'Revenu': 'Revenu net imposable', 'IR': "Montant de l'IR"})
-    add_bracket_lines_to_fig(fig, results['df_income_tax_evol'], results['bareme_annee_simulation'])
+    fig = create_base_tax_evolution_fig(results)
     fig.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='Votre situation')
-    fig.update_layout(xaxis_ticksuffix='€', yaxis_ticksuffix='€', xaxis_range=[0, results['length_simu']])
     st.plotly_chart(fig, use_container_width=True)
 
 def display_per_optim_tab(results, salary, ir_residuel_min):
@@ -116,8 +97,7 @@ def display_per_optim_tab(results, salary, ir_residuel_min):
 
     st.divider()
     st.subheader("Visualisation de l'optimisation")
-    fig = px.line(results['df_income_tax_evol'], x='Revenu', y='IR', labels={'Revenu': 'Revenu net imposable', 'IR': "Montant de l'IR"})
-    add_bracket_lines_to_fig(fig, results['df_income_tax_evol'], results['bareme_annee_simulation'])
+    fig = create_base_tax_evolution_fig(results)
     fig.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='IR initial')
     
     if not results['df_income_tax_evol'].empty and versement_optimal > 0:
@@ -135,7 +115,7 @@ def display_per_optim_tab(results, salary, ir_residuel_min):
             annotation_position="bottom right"
         )
     
-    fig.update_layout(title="Impact du versement PER optimal sur la courbe d'imposition", xaxis_ticksuffix='€', yaxis_ticksuffix='€', xaxis_range=[0, results['length_simu']])
+    fig.update_layout(title="Impact du versement PER optimal sur la courbe d'imposition")
     st.plotly_chart(fig, use_container_width=True)
 
 def display_per_effect_tab(results, salary, plafond_PER, ir_residuel_min):
@@ -162,8 +142,7 @@ def display_per_effect_tab(results, salary, plafond_PER, ir_residuel_min):
 
     # --- Ajout du graphique d'impact sur la courbe d'imposition ---
     st.subheader("Impact du versement sur la courbe d'imposition")
-    fig_impact = px.line(results['df_income_tax_evol'], x='Revenu', y='IR', labels={'Revenu': 'Revenu net imposable', 'IR': "Montant de l'IR"})
-    add_bracket_lines_to_fig(fig_impact, results['df_income_tax_evol'], results['bareme_annee_simulation'])
+    fig_impact = create_base_tax_evolution_fig(results)
     
     # Point de départ
     fig_impact.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='IR initial')
@@ -183,7 +162,7 @@ def display_per_effect_tab(results, salary, plafond_PER, ir_residuel_min):
             annotation_position="bottom right"
         )
     
-    fig_impact.update_layout(title="Impact du versement PER sur la courbe d'imposition", xaxis_ticksuffix='€', yaxis_ticksuffix='€', xaxis_range=[0, results['length_simu']])
+    fig_impact.update_layout(title="Impact du versement PER sur la courbe d'imposition")
     st.plotly_chart(fig_impact, use_container_width=True)
 
     st.divider()
@@ -212,10 +191,11 @@ if 'parents' not in st.session_state or not st.session_state.parents:
 
 parents = st.session_state.get('parents', [])
 enfants = st.session_state.get('enfants', [])
-revenus_salaires, revenu_foncier_net = get_revenus_imposables()
-total_salary = sum(revenus_salaires.values())
 
-if not revenus_salaires:
+# Vérification des revenus sans lancer le calcul complet
+total_salary_check = sum(r.get('montant', 0) for r in st.session_state.get('revenus', []) if r.get('type') == 'Salaire')
+
+if total_salary_check == 0:
     st.warning("⚠️ Veuillez renseigner les salaires dans la page **4_Flux** pour lancer l'analyse.")
     st.stop()
 
@@ -232,11 +212,16 @@ run_simulation = st.sidebar.button("🚀 Lancer la simulation PER", use_containe
 
 with st.sidebar.expander("Options", expanded=False):
     annee_simulation = st.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year, key="per_annee")
-    input_revenu_max_simu = st.number_input("Revenu max. pour les graphiques (€)", value=max(150000, int(total_salary * 1.2)), step=1000, min_value=int(total_salary))
+    # On calcule les revenus ici pour les valeurs par défaut des inputs
+    revenus_salaires, revenu_foncier_net = get_revenus_imposables(annee_simulation)
+    total_salary = sum(revenus_salaires.values())
+    input_revenu_max_simu = st.number_input("Revenu max. pour les graphiques (€)", value=max(150000, int(total_salary * 1.2)), step=1000, min_value=int(total_salary if total_salary > 0 else 1))
 
 if run_simulation:
     with st.spinner("Calculs d'optimisation en cours avec OpenFisca..."):
         try:
+            # On recalcule les revenus avec l'année de simulation au cas où elle aurait changé
+            revenus_salaires, revenu_foncier_net = get_revenus_imposables(annee_simulation)
             results = analyser_optimisation_per(annee=annee_simulation, parents=parents, enfants=enfants, revenus_annuels=revenus_salaires, revenu_foncier_net=revenu_foncier_net, est_parent_isole=est_parent_isole, plafond_per=input_plafond_PER, ir_residuel_min=input_ir_residuel_min, revenu_max_simu=input_revenu_max_simu)
             st.session_state.per_simulation_results = results
             st.session_state.per_simulation_results['plafond_per_input'] = input_plafond_PER

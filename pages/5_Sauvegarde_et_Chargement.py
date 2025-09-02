@@ -18,30 +18,28 @@ def json_decoder_hook(obj):
         return datetime.fromisoformat(obj['value']).date()
     return obj
 
+# --- Clés du session_state à sauvegarder ---
+PERSISTENT_KEYS = [
+    'parents', 'enfants', 'actifs', 'passifs', 
+    'projection_settings', 'revenus', 'depenses'
+]
+
 # --- Fonctions principales de la page ---
 
 def get_data_to_save():
     """Rassemble toutes les données pertinentes du session_state dans un dictionnaire."""
-    return {
-        'parents': st.session_state.get('parents', []),
-        'enfants': st.session_state.get('enfants', []),
-        'actifs': st.session_state.get('actifs', []),
-        'passifs': st.session_state.get('passifs', []),
-        'projection_settings': st.session_state.get('projection_settings', {}),
-        'revenus': st.session_state.get('revenus', []),
-        'depenses': st.session_state.get('depenses', [])
-    }
+    data_to_save = {}
+    for key in PERSISTENT_KEYS:
+        # Utilise une valeur par défaut appropriée (liste ou dictionnaire)
+        default_value = {} if 'settings' in key else []
+        data_to_save[key] = st.session_state.get(key, default_value)
+    return data_to_save
 
 def load_data_into_session(data):
     """Charge les données depuis un dictionnaire dans le session_state."""
-    st.session_state.parents = data.get('parents', [])
-    st.session_state.enfants = data.get('enfants', [])
-    st.session_state.actifs = data.get('actifs', [])
-    st.session_state.passifs = data.get('passifs', [])
-    st.session_state.projection_settings = data.get('projection_settings', {})
-    st.session_state.revenus = data.get('revenus', [])
-    st.session_state.depenses = data.get('depenses', [])
-
+    for key in PERSISTENT_KEYS:
+        default_value = {} if 'settings' in key else []
+        setattr(st.session_state, key, data.get(key, default_value))
 
 #def main():
 st.title("💾 Sauvegarde et Chargement")
@@ -80,4 +78,3 @@ if uploaded_file is not None:
         st.rerun()
     except Exception as e:
         st.error(f"❌ Erreur lors du chargement du fichier : {e}")
-

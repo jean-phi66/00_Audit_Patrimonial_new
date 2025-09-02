@@ -337,29 +337,16 @@ def run_data_migrations():
     Exécute des migrations de données pour assurer la compatibilité avec les nouvelles versions
     de la structure de données (ex: ajout d'ID, renommage de champs).
     """
-    # Migration pour les UUID des actifs
+    # --- Migration pour les actifs ---
     for actif in st.session_state.actifs:
+        # Assurer l'existence d'un ID unique
         if 'id' not in actif:
             actif['id'] = str(uuid.uuid4())
+        # Normaliser la valeur de 'mode_exploitation' pour éviter les erreurs de casse
+        if actif.get('mode_exploitation') == 'Location nue':  # Ancien format en minuscule
+            actif['mode_exploitation'] = 'Location Nue'  # Nouveau format avec majuscule
 
-    # Migration pour les champs des passifs
-    for passif in st.session_state.passifs:
-        if 'valeur' in passif and 'montant_initial' not in passif:
-            passif['montant_initial'] = passif.pop('valeur')
-        if 'duree_annees' in passif: # Migration de années vers mois
-            passif['duree_mois'] = passif.pop('duree_annees') * 12
-        if 'taux_annuel' not in passif:
-            passif['taux_annuel'] = 1.5
-        if 'duree_mois' not in passif:
-            passif['duree_mois'] = 240
-        if 'date_debut' not in passif:
-            passif['date_debut'] = date(2020, 1, 1)
-    # Migration pour les UUID des actifs
-    for actif in st.session_state.actifs:
-        if 'id' not in actif:
-            actif['id'] = str(uuid.uuid4())
-
-    # Migration pour les champs des passifs
+    # --- Migration pour les passifs ---
     for passif in st.session_state.passifs:
         if 'valeur' in passif and 'montant_initial' not in passif:
             passif['montant_initial'] = passif.pop('valeur')

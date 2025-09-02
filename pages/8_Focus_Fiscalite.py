@@ -12,45 +12,14 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 
-from core.patrimoine_logic import find_associated_loans, calculate_loan_annual_breakdown
+from core.fiscal_logic import get_revenus_imposables
 
 try:
     from utils.openfisca_utils import analyser_fiscalite_foyer, simuler_evolution_fiscalite, add_bracket_lines_to_fig
     OPENFISCA_UTILITY_AVAILABLE = True
 except ImportError as e:
     OPENFISCA_UTILITY_AVAILABLE = False
-    # Store the specific error for more informative messages
     st.session_state.openfisca_import_error = str(e)
-def get_revenus_imposables():
-    """Calcule les revenus imposables à partir des données de l'application."""
-    # 1. Revenus du travail
-    revenus_salaires = {}
-    for revenu in st.session_state.get('revenus', []):
-        if revenu.get('type') == 'Salaire':
-            prenom = revenu['libelle'].split(' ')[1]
-            revenus_salaires[prenom] = revenu.get('montant', 0) * 12
-
-    # 2. Revenus fonciers
-    total_loyers_bruts_annee = 0
-    total_charges_deductibles_annee = 0
-    passifs = st.session_state.get('passifs', [])
-    actifs_productifs = [a for a in st.session_state.get('actifs', []) if a.get('type') == 'Immobilier productif']
-
-    for asset in actifs_productifs:
-        loyers_annuels = asset.get('loyers_mensuels', 0) * 12
-        charges_annuelles = asset.get('charges', 0) * 12
-        taxe_fonciere = asset.get('taxe_fonciere', 0)
-        
-        loans = find_associated_loans(asset.get('id'), passifs)
-        interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=date.today().year).get('interest', 0) for l in loans)
-
-        charges_deductibles_asset = charges_annuelles + taxe_fonciere + interets_emprunt
-        total_loyers_bruts_annee += loyers_annuels
-        total_charges_deductibles_annee += charges_deductibles_asset
-
-    revenu_foncier_net = max(0, total_loyers_bruts_annee - total_charges_deductibles_annee)
-
-    return revenus_salaires, revenu_foncier_net
 
 def display_summary(results):
     """Affiche la synthèse des résultats fiscaux."""
@@ -170,10 +139,11 @@ if 'parents' not in st.session_state or not st.session_state.parents:
 
 # --- Préparation des données ---
 parents = st.session_state.get('parents', [])
-enfants = st.session_state.get('enfants', [])
-revenus_salaires, revenu_foncier_net = get_revenus_imposables()
+enfants = st.session_state.get('enfants', []) 
 
-if not revenus_salaires:
+total_salary_check = sum(r.get('montant', 0) for r in st.session_state.get('revenus', []) if r.get('type') == 'Salaire')
+
+if total_salary_check == 0:
     st.warning("⚠️ Veuillez renseigner les salaires dans la page **4_Flux** pour lancer l'analyse.")
     st.stop()
 
@@ -191,6 +161,9 @@ if is_single_parent_auto:
     )
 else:
     est_parent_isole = False
+
+# Calculer les revenus en amont pour les utiliser dans les valeurs par défaut des widgets.
+revenus_salaires, revenu_foncier_net = get_revenus_imposables(annee_simulation)
 
 revenu_max_graphique = st.sidebar.number_input(
     "Revenu maximum pour les graphiques", 

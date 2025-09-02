@@ -46,6 +46,9 @@ def calculate_property_metrics(asset, passifs, tmi, social_tax, year_of_analysis
     tax_info = calculate_property_tax(asset, loans, tmi, social_tax, amortissement_annuel_utilise=metrics['amortissement_annuel_potentiel'], year=year_of_analysis)
     metrics['tax_info'] = tax_info
     metrics['net_yield_after_tax'] = calculate_net_yield_tax(asset, tax_info['total'])
+    # Ajout réduction Pinel et Scellier dans metrics
+    metrics['reduction_pinel'] = tax_info.get('reduction_pinel', 0)
+    metrics['reduction_scellier'] = tax_info.get('reduction_scellier', 0)
 
     # 4. Calculer l'effort d'épargne mensuel (cash-flow)
     savings_effort = calculate_savings_effort(asset, loans, tax_info['total'], year=year_of_analysis)
@@ -122,19 +125,23 @@ def _create_waterfall_fig(metrics, year_of_analysis, is_lmnp=False):
             f"{metrics['cash_flow_annuel']:,.0f} €"
         ]
     else:
-        # Cas Location Nue : avec réduction d'impôt
+        # Cas Location Nue : avec réduction d'impôt (Pinel et/ou Scellier)
+        reduction_pinel = metrics.get('reduction_pinel', 0)
+        reduction_scellier = metrics.get('reduction_scellier', 0)
+        reduction_total = reduction_pinel + reduction_scellier
+
         x_labels = base_x + ["Impôt (IR)", "Prélèv. Sociaux", "Réduction d'impôt", "Résultat avant capital", "Remboursement du Capital", final_label]
         measures = base_measures + ["relative", "relative", "relative", "total", "relative", "total"]
         y_values = base_y + [
-            -metrics['tax_info']['ir'], -metrics['tax_info']['ps'], metrics['reduction_pinel'],
+            -metrics['tax_info']['ir'], -metrics['tax_info']['ps'], reduction_total,
             None,  # Total: Résultat avant capital
             -metrics['capital_rembourse_annuel'],
             None   # Total final
         ]
         text_values = base_text + [
             f"{-metrics['tax_info']['ir']:,.0f} €", f"{-metrics['tax_info']['ps']:,.0f} €",
-            f"+{metrics['reduction_pinel']:,.0f} €" if metrics['reduction_pinel'] > 0 else " ",
-            f"{metrics['resultat_avant_remboursement_capital']:,.0f} €",
+            f"+{reduction_total:,.0f} €" if reduction_total > 0 else " ",
+            f"{metrics['revenus_fonciers_nets'] - metrics['tax_info']['ir'] - metrics['tax_info']['ps'] + reduction_total:,.0f} €",
             f"{-metrics['capital_rembourse_annuel']:,.0f} €",
             f"{metrics['cash_flow_annuel']:,.0f} €"
         ]

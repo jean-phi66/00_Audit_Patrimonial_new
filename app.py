@@ -1,5 +1,6 @@
 import streamlit as st
-from collections import OrderedDict
+import os
+import sys
 
 # Configuration de la page principale
 st.set_page_config(
@@ -34,55 +35,34 @@ if 'revenus' not in st.session_state:
 if 'depenses' not in st.session_state:
     st.session_state.depenses = []
 
-# --- Configuration des pages et de leur ordre ---
-
-page_config = OrderedDict({
-    "Accueil": None,  # Page d'accueil, pas besoin de fichier dédié
-    "👪 Foyer": {
-        "1_Famille": "Composition du foyer",
-    },
-    "🏛️ Patrimoine": {
-        "2_Patrimoine": "Détail du patrimoine",
-    },
-    "💸 Flux": {
-        "4_Flux": "Flux mensuels (revenus & dépenses)",
-    },
-    "🔎 Analyse": {
-        "7_Capacite_Endettement": "Capacité d'endettement",
-        "4_Projection": "Projection des grandes étapes de vie",
-        "3_Focus_Immobilier": "Focus immobilier locatif",
-        "8_Focus_Fiscalite": "Focus fiscalité",
-    },
-    "📄 Rapport": {
-        "6_Rapport": "Génération de rapport PDF",
-    },
-    "🛠️ Outils": {
-        "5_Sauvegarde_et_Chargement": "Sauvegarde et chargement des données",
-        "99_Debug": "Debug - Session State",
-    },
-})
-
-
-accueil_page = st.Page("pages/0_Accueil.py", title="👋🏽 Accueil")#, icon=":material/home:")
-load_save_page = st.Page("pages/5_Sauvegarde_et_Chargement.py", title="💾 Sauvegarde et chargement")#, icon=":material/save:")
-report_page = st.Page("pages/6_Rapport.py", title="📄 Rapport PDF")#, icon=":material/article:")
-
-famille_page = st.Page("pages/1_Famille.py", title="🧑‍🧑‍🧒‍🧒 Composition du foyer")#, icon=":material/group:")#, icon=":material/add_circle:")
-patrimoine_page = st.Page("pages/2_Patrimoine.py", title="💰 Description du patrimoine")#, icon=":material/attach_money:")
-flux_page = st.Page("pages/4_Flux.py", title="💸  Flux : revenus & dépenses")#, icon=":material/monetization_on:")
-
-immobilier_page = st.Page("pages/3_Focus_Immobilier.py", title="🏘️ Focus Immobilier")#, icon=":material/house:")
-fiscalite_page = st.Page("pages/8_Focus_Fiscalite.py", title="🧐Focus Fiscalité")#, icon=":material/monetization_on:")
-endettement_page = st.Page("pages/7_Capacite_Endettement.py", title="🏦 Capacité d'endettement")#, icon=":material/assessment:")
-projection_page = st.Page("pages/4_Projection.py", title="📈 Projection")#, icon=":material/calendar_today:")
-
-PER_page = st.Page("pages/9_Optimisation_PER.py", title="🎯 Optimisation PER")#, icon=":material/lightbulb:")
-#create_page = st.Page("pages/3_Flux.py", title="Delete entry", icon=":material/delete:")
-
-pg = st.navigation({'Fichier':[accueil_page,  load_save_page, report_page],
-                   'Informations du Foyer': [famille_page, patrimoine_page, flux_page],
-                   'Analyse': [immobilier_page, fiscalite_page, endettement_page],
-                   'Projection': [projection_page],
-                   'Solutions': [PER_page]})
-#st.set_page_config(page_title="Data manager", page_icon=":material/edit:")
+pg = st.navigation(
+    {
+        "Fichier": [
+            st.Page("pages/0_Accueil.py", title="Accueil", icon="🏠"),
+            st.Page("pages/5_Sauvegarde_et_Chargement.py", title="Sauvegarde et chargement", icon="💾"),
+            st.Page("pages/6_Rapport.py", title="Rapport PDF", icon="📄"),
+        ],
+        "Informations du Foyer": [
+            st.Page("pages/1_Famille.py", title="Composition du foyer", icon="🧑‍🧑‍🧒‍🧒"),
+            st.Page("pages/2_Patrimoine.py", title="Description du patrimoine", icon="💰"),
+            st.Page("pages/4_Flux.py", title="Flux : revenus & dépenses", icon="💸"),
+        ],
+        "Analyse": [
+            st.Page("pages/3_Focus_Immobilier.py", title="Focus Immobilier", icon="🏘️"),
+            st.Page("pages/8_Focus_Fiscalite.py", title="Focus Fiscalité", icon="🧐"),
+            st.Page("pages/7_Capacite_Endettement.py", title="Capacité d'endettement", icon="🏦"),
+        ],
+        "Projection": [
+            st.Page("pages/4_Projection.py", title="Projection", icon="📈"),
+        ],
+        "Solutions": [
+            st.Page("pages/9_Optimisation_PER.py", title="Optimisation PER", icon="🎯"),
+            st.Page("pages/8_Simulation_Manuelle.py", title="Simulation Manuelle", icon="🕹️"),
+            st.Page("pages/9_Optimisation_Patrimoniale.py", title="Optimisation Globale", icon="💫"),
+        ],
+        "Outils": [
+            st.Page("pages/99_Debug.py", title="Debug - Session State", icon="🐛"),
+        ]
+    }, position='top'
+)
 pg.run()

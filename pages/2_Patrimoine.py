@@ -1,9 +1,10 @@
 import streamlit as st
 
+# Import des composants UI spécifiques
 from core.patrimoine_display import (
+    display_assets_ui,
     initialize_session_state,
     run_data_migrations,
-    display_assets_ui,
     display_liabilities_ui,
     display_summary_and_charts
 )

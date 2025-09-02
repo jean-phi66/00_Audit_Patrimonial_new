@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import date
 import streamlit as st
-from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loans, calculate_crd
+from core.patrimoine_logic import calculate_loan_annual_breakdown, find_associated_loans, calculate_crd, calculate_lmnp_amortissement_annuel
 
 try:
     from utils.openfisca_utils import analyser_fiscalite_foyer
@@ -217,21 +217,30 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
         year_data['Autres revenus'] = sum(r.get('montant', 0) * 12 for r in all_revenus if r.get('type') == 'Autre')
 
         # --- Calcul de l'impôt ---
-        # 1. Calcul des revenus fonciers et de la réduction Pinel pour l'année
+        # 1. Calcul des revenus fonciers et LMNP ---
         total_loyers_bruts_annee = 0
         total_charges_deductibles_annee = 0
         total_reduction_pinel_annee = 0
+        total_revenu_lmnp_annee = 0
 
         for asset in actifs_productifs:
-            # Calcul des revenus et charges
             loyers_annuels = asset.get('loyers_mensuels', 0) * 12
             charges_annuelles = asset.get('charges', 0) * 12
             taxe_fonciere = asset.get('taxe_fonciere', 0)
-            
             loans = find_associated_loans(asset.get('id'), passifs)
             interets_emprunt = sum(calculate_loan_annual_breakdown(l, year=annee).get('interest', 0) for l in loans)
-
             charges_deductibles_asset = charges_annuelles + taxe_fonciere + interets_emprunt
+
+            # --- Traitement LMNP avec amortissement réel ---
+            if asset.get('mode_exploitation') == 'Location Meublée':
+                # Utilisation de l'amortissement réel (dotation annuelle)
+                amortissement = calculate_lmnp_amortissement_annuel(asset)
+                amortissement_annuel = amortissement.get('total', 0)
+                revenu_lmnp = loyers_annuels - charges_annuelles - taxe_fonciere - interets_emprunt - amortissement_annuel
+                total_revenu_lmnp_annee += max(0, revenu_lmnp)
+                continue  # Ne pas inclure dans les revenus fonciers classiques
+
+            # Traitement classique (revenus fonciers)
             total_loyers_bruts_annee += loyers_annuels
             total_charges_deductibles_annee += charges_deductibles_asset
 
@@ -248,6 +257,7 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
         # Ajout du revenu foncier net calculé pour vérification dans le tableau
         revenu_foncier_net_calcule = max(0, total_loyers_bruts_annee - total_charges_deductibles_annee)
         year_data['Revenu Foncier Net'] = revenu_foncier_net_calcule
+        year_data['Revenu LMNP'] = total_revenu_lmnp_annee
 
         # Calcul des prélèvements sociaux sur les revenus fonciers
         prelevements_sociaux = revenu_foncier_net_calcule * 0.172
@@ -257,6 +267,7 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
         if OPENFISCA_UTILITY_AVAILABLE:
             est_parent_isole = len(parents) == 1
             # Utilisation de la nouvelle fonction d'analyse complète
+            # Retirer le paramètre revenu_lmnp si la fonction ne le supporte pas
             resultats_fiscaux = analyser_fiscalite_foyer(
                 annee=annee,
                 parents=parents,
@@ -266,15 +277,14 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
                 est_parent_isole=est_parent_isole
             )
             impot_brut = resultats_fiscaux.get('ir_net', 0)
-            impot = max(0, impot_brut - total_reduction_pinel_annee) # La réduction Pinel est appliquée après
+            impot = max(0, impot_brut - total_reduction_pinel_annee)
         else:
             # Fallback si OpenFisca n'est pas disponible
-            # On utilise le revenu foncier net calculé manuellement
-            total_revenus_imposables = total_revenus_foyer + revenu_foncier_net_calcule
-            impot_brut = total_revenus_imposables * 0.15 # Taux forfaitaire simple
+            total_revenus_imposables = total_revenus_foyer + revenu_foncier_net_calcule + total_revenu_lmnp_annee
+            impot_brut = total_revenus_imposables * 0.15
             impot = max(0, impot_brut - total_reduction_pinel_annee)
 
-        year_data['Impôt sur le revenu'] = impot  # Peut être négatif avec certaines réductions d'impôts
+        year_data['Impôt sur le revenu'] = impot
 
         # --- Finalisation des calculs financiers ---
         # Le "Reste à vivre" est maintenant calculé après déduction de toutes les charges, de l'impôt et des prélèvements sociaux.
