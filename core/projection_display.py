@@ -230,3 +230,266 @@ def display_cumulative_tax_at_retirement(df_projection, parents, settings):
                         value="N/A",
                         help=f"L'année de retraite ({annee_retraite}) est en dehors de la période de projection."
                     )
+
+def display_retirement_transition_analysis(df_projection, parents, settings):
+    """Affiche l'analyse de la transition vers la retraite avec graphiques en barres et KPI."""
+    st.subheader("🔍 Transition vers la retraite")
+    st.markdown("Comparaison de la situation financière entre le dernier mois d'activité (décembre N-1) et le premier mois de retraite (janvier N).")
+    
+    if not parents:
+        st.info("Aucun parent renseigné pour l'analyse de transition.")
+        return
+    
+    # Trouver l'année de départ à la retraite (prendre le premier parent)
+    premier_parent = parents[0]
+    prenom = premier_parent.get('prenom')
+    dob = premier_parent.get('date_naissance')
+    
+    if not prenom or not dob or prenom not in settings:
+        st.warning("Informations manquantes pour calculer l'année de départ à la retraite.")
+        return
+    
+    age_retraite = settings[prenom]['retraite']
+    annee_retraite = dob.year + age_retraite
+    annee_avant_retraite = annee_retraite - 1
+    
+    st.info(f"📅 Analyse basée sur le départ à la retraite de **{prenom}** en **janvier {annee_retraite}** (à {age_retraite} ans)")
+    st.caption(f"Comparaison : **Année {annee_avant_retraite}** (dernière année d'activité) vs **Année {annee_retraite}** (première année de retraite)")
+    st.markdown(f"💡 *Équivalent à comparer Décembre {annee_avant_retraite} vs Janvier {annee_retraite} en termes de revenus mensuels*")
+    
+    # Filtrer les données pour les deux années clés
+    df_transition = df_projection[
+        df_projection['Année'].isin([annee_avant_retraite, annee_retraite])
+    ].copy()
+    
+    if df_transition.empty:
+        st.warning(f"Aucune donnée disponible pour les années {annee_avant_retraite} et {annee_retraite}.")
+        return
+    
+    # Préparer les données pour le graphique (conversion en montants mensuels)
+    # Ordre des catégories identique aux graphiques de projection
+    categories_ordre = [
+        'Reste à vivre',
+        'Prélèvements Sociaux', 
+        'Impôt sur le revenu',
+        'Coût des études',
+        'Autres Dépenses',
+        'Taxes Foncières',
+        'Charges Immobilières',
+        'Mensualités Prêts'
+    ]
+    
+    donnees_graphique = []
+    for _, row in df_transition.iterrows():
+        annee = int(row['Année'])
+        if annee == annee_avant_retraite:
+            label_annee = f"Année {annee}\n(Dernière année d'activité)"
+        else:
+            label_annee = f"Année {annee}\n(Première année de retraite)"
+        
+        # Conversion des montants annuels en mensuels et empilement
+        # Logique identique aux graphiques de projection : empiler toutes les composantes
+        for categorie in categories_ordre:
+            if categorie in row and row[categorie] > 0:
+                montant_mensuel = row[categorie] / 12
+                donnees_graphique.append({
+                    'Période': label_annee, 
+                    'Type': categorie, 
+                    'Montant': montant_mensuel, 
+                    'Valeur_num': montant_mensuel
+                })
+    
+    df_graph = pd.DataFrame(donnees_graphique)
+    
+    # Créer le graphique en barres empilées avec les mêmes couleurs que les projections
+    import plotly.express as px
+    
+    # Carte de couleurs cohérente avec les graphiques de projection
+    # Utiliser les couleurs par défaut de Plotly dans le même ordre que les projections
+    couleurs_projection = [
+        '#636EFA',  # Reste à vivre (bleu)
+        '#EF553B',  # Prélèvements Sociaux (rouge)
+        '#00CC96',  # Impôt sur le revenu (vert)
+        '#AB63FA',  # Coût des études (violet)
+        '#FFA15A',  # Autres Dépenses (orange)
+        '#19D3F3',  # Taxes Foncières (cyan)
+        '#FF6692',  # Charges Immobilières (rose)
+        '#B6E880',  # Mensualités Prêts (vert clair)
+    ]
+    
+    color_discrete_map = {}
+    for i, categorie in enumerate(categories_ordre):
+        if i < len(couleurs_projection):
+            color_discrete_map[categorie] = couleurs_projection[i]
+    
+    fig = px.bar(
+        df_graph,
+        x='Période',
+        y='Montant',
+        color='Type',
+        title="Comparaison des revenus mensuels : Répartition par poste de dépense",
+        labels={'Montant': 'Montant Mensuel (€)', 'Période': ''},
+        height=500,
+        color_discrete_map=color_discrete_map,
+        category_orders={'Type': categories_ordre}
+    )
+    
+    # Ajouter une ligne pour les revenus totaux (référence)
+    periodes = []
+    revenus = []
+    for _, row in df_transition.iterrows():
+        annee = int(row['Année'])
+        if annee == annee_avant_retraite:
+            label_annee = f"Année {annee}\n(Dernière année d'activité)"
+        else:
+            label_annee = f"Année {annee}\n(Première année de retraite)"
+        
+        periodes.append(label_annee)
+        revenus.append(row['Revenus du foyer'] / 12)
+    
+    fig.add_scatter(
+        x=periodes,
+        y=revenus,
+        mode='markers+text',
+        name='Total Revenus',
+        text=[f"<b>{r:,.0f}€</b>" for r in revenus],  # Texte en gras
+        textposition="top center",
+        textfont=dict(size=16, color='red'),  # Police plus grande et rouge
+        marker=dict(color='red', size=12, symbol='diamond'),
+        showlegend=True
+    )
+    
+    # Personnaliser l'affichage
+    fig.update_layout(
+        yaxis_title='Montant Mensuel (€)',
+        xaxis_title='',
+        legend_title_text='Postes de dépenses',
+        barmode='stack'  # Mode empilé comme les projections
+    )
+    
+    # Réduire la largeur des barres pour l'esthétique (seulement les barres, pas les scatter)
+    fig.update_traces(width=0.5, selector=dict(type='bar'))
+    
+    # Ajouter les valeurs au centre de chaque barre
+    # Calculer les positions Y pour centrer le texte dans chaque segment
+    for periode in df_graph['Période'].unique():
+        df_periode = df_graph[df_graph['Période'] == periode].copy()
+        
+        # Trier selon l'ordre des catégories pour calculer les positions correctement
+        df_periode['ordre'] = df_periode['Type'].map({cat: i for i, cat in enumerate(categories_ordre)})
+        df_periode = df_periode.sort_values('ordre')
+        
+        # Calculer les positions Y cumulées pour centrer le texte
+        cumul = 0
+        for _, row in df_periode.iterrows():
+            montant = row['Montant']
+            if montant > 0:  # Seulement pour les montants positifs
+                # Position Y au centre du segment
+                y_position = cumul + (montant / 2)
+                
+                # Ajouter l'annotation avec police plus grande
+                fig.add_annotation(
+                    x=periode,
+                    y=y_position,
+                    text=f"{montant:,.0f}€",
+                    showarrow=False,
+                    font=dict(color="white", size=14, family="Arial Black"),
+                    bgcolor="rgba(0,0,0,0.3)",  # Fond semi-transparent pour la lisibilité
+                    bordercolor="white",
+                    borderwidth=1
+                )
+                
+                cumul += montant
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Calcul des KPI de comparaison (en montants mensuels)
+    data_avant = df_transition[df_transition['Année'] == annee_avant_retraite].iloc[0]
+    data_retraite = df_transition[df_transition['Année'] == annee_retraite].iloc[0]
+    
+    # Conversion en montants mensuels
+    revenus_avant_mensuel = data_avant['Revenus du foyer'] / 12
+    revenus_retraite_mensuel = data_retraite['Revenus du foyer'] / 12
+    reste_avant_mensuel = data_avant['Reste à vivre'] / 12
+    reste_retraite_mensuel = data_retraite['Reste à vivre'] / 12
+    
+    # Calcul des ratios
+    ratio_revenus = (revenus_retraite_mensuel / revenus_avant_mensuel) if revenus_avant_mensuel > 0 else 0
+    ratio_reste_vivre = (reste_retraite_mensuel / reste_avant_mensuel) if reste_avant_mensuel > 0 else 0
+    
+    # Affichage des KPI
+    st.markdown("### 📊 Indicateurs de transition (montants mensuels)")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label=f"Revenus {annee_avant_retraite}",
+            value=f"{revenus_avant_mensuel:,.0f} €/mois",
+            help=f"Revenus mensuels moyens pendant l'année d'activité {annee_avant_retraite}"
+        )
+    
+    with col2:
+        variation_revenus = revenus_retraite_mensuel - revenus_avant_mensuel
+        st.metric(
+            label=f"Revenus {annee_retraite}",
+            value=f"{revenus_retraite_mensuel:,.0f} €/mois",
+            delta=f"{variation_revenus:,.0f} €",
+            help=f"Revenus mensuels moyens pendant l'année de retraite {annee_retraite}"
+        )
+    
+    with col3:
+        st.metric(
+            label=f"Reste à vivre {annee_avant_retraite}",
+            value=f"{reste_avant_mensuel:,.0f} €/mois",
+            help=f"Capacité d'épargne mensuelle moyenne pendant l'année d'activité {annee_avant_retraite}"
+        )
+    
+    with col4:
+        variation_reste_vivre = reste_retraite_mensuel - reste_avant_mensuel
+        st.metric(
+            label=f"Reste à vivre {annee_retraite}",
+            value=f"{reste_retraite_mensuel:,.0f} €/mois",
+            delta=f"{variation_reste_vivre:,.0f} €",
+            help=f"Capacité d'épargne mensuelle moyenne pendant l'année de retraite {annee_retraite}"
+        )
+    
+    # Ratios
+    st.markdown("### 🎯 Ratios de transition")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        couleur_revenus = "normal" if ratio_revenus >= 0.8 else "inverse"
+        st.metric(
+            label=f"Ratio Revenus ({annee_retraite}/{annee_avant_retraite})",
+            value=f"{ratio_revenus:.1%}",
+            delta=f"{(ratio_revenus - 1):.1%}",
+            delta_color=couleur_revenus,
+            help=f"Pourcentage de maintien des revenus mensuels entre {annee_avant_retraite} et {annee_retraite}"
+        )
+    
+    with col2:
+        couleur_reste = "normal" if ratio_reste_vivre >= 0.8 else "inverse"
+        st.metric(
+            label=f"Ratio Reste à vivre ({annee_retraite}/{annee_avant_retraite})",
+            value=f"{ratio_reste_vivre:.1%}",
+            delta=f"{(ratio_reste_vivre - 1):.1%}",
+            delta_color=couleur_reste,
+            help=f"Pourcentage de maintien de la capacité d'épargne mensuelle entre {annee_avant_retraite} et {annee_retraite}"
+        )
+    
+    # Analyse textuelle
+    st.markdown("### 💡 Analyse de la transition")
+    if ratio_revenus >= 0.8:
+        st.success(f"✅ **Excellente transition** : Les revenus mensuels sont maintenus à {ratio_revenus:.1%} lors du passage à la retraite.")
+    elif ratio_revenus >= 0.6:
+        st.warning(f"⚠️ **Transition modérée** : Les revenus mensuels chutent à {ratio_revenus:.1%} lors du passage à la retraite.")
+    else:
+        st.error(f"🚨 **Transition difficile** : Les revenus mensuels chutent significativement à {ratio_revenus:.1%} lors du passage à la retraite.")
+    
+    if ratio_reste_vivre >= 0.8:
+        st.success(f"✅ **Capacité d'épargne maintenue** : Le reste à vivre mensuel représente {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
+    elif ratio_reste_vivre >= 0.5:
+        st.warning(f"⚠️ **Capacité d'épargne réduite** : Le reste à vivre mensuel représente {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
+    else:
+        st.error(f"🚨 **Capacité d'épargne fortement impactée** : Le reste à vivre mensuel ne représente que {ratio_reste_vivre:.1%} du niveau d'avant retraite.")

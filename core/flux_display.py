@@ -64,14 +64,31 @@ def display_depenses_ui():
 
     # --- Dépenses du patrimoine (automatiques) ---
     st.subheader("Dépenses du patrimoine (auto)")
-    auto_depenses = [d for d in st.session_state.depenses if 'source_id' in d]
-    if not auto_depenses:
+    patrimoine_depenses = [d for d in st.session_state.depenses if 'source_id' in d and d.get('source_id') != 'fiscal_auto']
+    if not patrimoine_depenses:
         st.info("Aucune dépense liée au patrimoine détectée (charges, taxes, prêts).")
     else:
-        for depense in auto_depenses:
+        for depense in patrimoine_depenses:
             d_c1, d_c2 = st.columns([3, 2])
             d_c1.text_input("Libellé (auto)", value=depense['libelle'], key=f"depense_libelle_auto_{depense['id']}", disabled=True)
             d_c2.number_input("Montant mensuel (€) (auto)", value=float(depense.get('montant', 0.0)), key=f"depense_montant_auto_{depense['id']}", disabled=True, format="%.2f")
+
+    # --- Dépenses fiscales (automatiques) ---
+    st.markdown("---")
+    st.subheader("🏛️ Fiscalité (auto)")
+    fiscal_depenses = [d for d in st.session_state.depenses if 'source_id' in d and d.get('source_id') == 'fiscal_auto']
+    if not fiscal_depenses:
+        st.info("Aucune dépense fiscale automatique calculée.")
+    else:
+        for depense in fiscal_depenses:
+            d_c1, d_c2, d_c3 = st.columns([3, 2, 1])
+            d_c1.text_input("Libellé (auto)", value=depense['libelle'], key=f"depense_libelle_fiscal_{depense['id']}", disabled=True)
+            d_c2.number_input("Montant mensuel (€) (auto)", value=float(depense.get('montant', 0.0)), key=f"depense_montant_fiscal_{depense['id']}", disabled=True, format="%.2f")
+            with d_c3:
+                st.write("")
+                st.write("")
+                if st.button("ℹ️", key=f"info_fiscal_{depense['id']}", help="Calcul basé sur les revenus du foyer"):
+                    st.info("💡 Ce montant est calculé automatiquement en fonction des salaires et revenus fonciers renseignés. Il se met à jour automatiquement.")
 
     # --- Dépenses manuelles ---
     st.markdown("---")

@@ -33,7 +33,8 @@ def generate_gantt_data(parents, enfants, settings, projection_duration):
         age_retraite = settings[prenom]['retraite']
         annee_retraite = dob.year + age_retraite
         
-        finish_actif = min(annee_retraite, annee_fin_projection)
+        # La période active se termine l'année précédant la retraite
+        finish_actif = min(annee_retraite - 1, annee_fin_projection)
 
         if today.year <= finish_actif:
             gantt_data.append(dict(
@@ -43,7 +44,8 @@ def generate_gantt_data(parents, enfants, settings, projection_duration):
                 Resource="Actif"
             ))
 
-        start_retraite = annee_retraite + 1
+        # La retraite commence l'année de transition (cohérent avec la logique des revenus)
+        start_retraite = annee_retraite
         if start_retraite <= annee_fin_projection:
             gantt_data.append(dict(
                 Task=prenom,
@@ -135,7 +137,8 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
         for parent in parents:
             prenom = parent['prenom']
             dob = parent['date_naissance']
-            age = calculate_age(dob, current_date_in_year)
+            # Calcul simplifié de l'âge pour cohérence avec le Gantt
+            age = annee - dob.year
             year_data[f'Âge {prenom}'] = age
             
             age_retraite = settings[prenom]['retraite']
@@ -203,7 +206,8 @@ def generate_financial_projection(parents, enfants, passifs, settings, projectio
         # 2. Calcul des autres dépenses (qui sont supposées constantes pour l'instant)
         all_depenses = st.session_state.get('depenses', [])
         charges_immo = sum(d.get('montant', 0) * 12 for d in all_depenses if d.get('categorie') == 'Logement' and 'source_id' in d)
-        taxes_foncieres = sum(d.get('montant', 0) * 12 for d in all_depenses if d.get('categorie') == 'Impôts et taxes' and 'source_id' in d)
+        # Exclure l'IR automatique des projections car il est recalculé avec OpenFisca
+        taxes_foncieres = sum(d.get('montant', 0) * 12 for d in all_depenses if d.get('categorie') == 'Impôts et taxes' and 'source_id' in d and d.get('source_id') != 'fiscal_auto')
         autres_depenses = sum(d.get('montant', 0) * 12 for d in all_depenses if 'source_id' not in d)
         
         year_data['Charges Immobilières'] = charges_immo

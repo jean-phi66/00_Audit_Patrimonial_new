@@ -3,6 +3,7 @@ import uuid
 import pandas as pd
 from datetime import date
 from core.patrimoine_logic import calculate_monthly_payment
+from core.fiscal_logic import calculate_monthly_income_tax
 
 # --- Constantes ---
 INSEE_DECILES_2021 = {
@@ -88,7 +89,20 @@ def sync_all_flux_data():
         if mensualite > 0:
             auto_depenses.append({'id': f"pret_{passif_id}", 'libelle': f"Mensualité de '{passif.get('libelle', 'Prêt N/A')}'", 'montant': mensualite, 'categorie': 'Remboursement de prêts', 'source_id': passif_id})
 
-    # --- 4. Réassemblage des listes ---
+    # --- 4. Synchronisation de l'impôt sur le revenu ---
+    # Calcul automatique de l'impôt sur le revenu mensuel (si activé)
+    if st.session_state.get('auto_ir_enabled', True):
+        ir_mensuel = calculate_monthly_income_tax()
+        if ir_mensuel > 0:
+            auto_depenses.append({
+                'id': 'impot_revenu_auto', 
+                'libelle': 'Impôt sur le revenu (calculé automatiquement)', 
+                'montant': ir_mensuel, 
+                'categorie': 'Impôts et taxes', 
+                'source_id': 'fiscal_auto'
+            })
+
+    # --- 5. Réassemblage des listes ---
     st.session_state.revenus = auto_revenus + manual_revenus
     st.session_state.depenses = auto_depenses + manual_depenses
 

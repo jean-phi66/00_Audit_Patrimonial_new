@@ -13,7 +13,8 @@ from core.projection_display import (
     display_projection_table,
     display_projection_chart,
     display_annual_tax_chart,
-    display_cumulative_tax_at_retirement
+    display_cumulative_tax_at_retirement,
+    display_retirement_transition_analysis
 )
 
 # --- Exécution Principale ---
@@ -60,6 +61,11 @@ else:
     st.header("🔎 Focus Fiscalité")
     display_annual_tax_chart(df_projection)
     display_cumulative_tax_at_retirement(df_projection, parents, settings)
+    
+    # Analyse de la transition vers la retraite
+    st.markdown("---")
+    st.header("🎯 Analyse de la Transition vers la Retraite")
+    display_retirement_transition_analysis(df_projection, parents, settings)
     
     st.markdown("---")
     st.header("🔎 Focus Emprunts")
