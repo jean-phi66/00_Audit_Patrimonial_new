@@ -1,7 +1,28 @@
-fpdf2==2.7.9
-numpy
-openfisca_core==43.3.7
-openfisca_france==172.0.5
-pandas==2.3.1
-plotly==6.0.1
+# Interface web et navigation
 streamlit==1.41.1
+
+# Manipulation de données
+pandas==2.3.1
+numpy>=1.24.0
+
+# Visualisation et graphiques
+plotly==6.0.1
+
+# Génération de rapports PDF
+fpdf2==2.7.9
+
+# Génération de rapports Word
+python-docx>=0.8.11
+
+# Calculs fiscaux (OpenFisca France)
+openfisca-france==172.0.5
+openfisca-core==43.3.7
+
+# Pour l'exportation d'images Plotly (optionnel mais recommandé)
+kaleido>=0.2.1
+
+# Gestion des images et polices (pour les rapports)
+Pillow>=9.0.0
+
+# Pour les calculs mathématiques avancés
+scipy>=1.10.0
