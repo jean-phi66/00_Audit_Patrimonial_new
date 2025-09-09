@@ -7,12 +7,6 @@ from core.charts import create_gantt_chart_fig
 def display_settings_ui(parents, enfants):
     """Affiche les widgets pour configurer les paramètres de la projection."""
     with st.expander("⚙️ Paramètres de la projection", expanded=True):
-        duree_projection = st.number_input(
-            "Durée de la projection (années)",
-            min_value=1, max_value=50, value=25, step=1,
-            help="Nombre d'années à projeter après le départ à la retraite des parents."
-        )
-        st.markdown("---")
         col1, col2 = st.columns(2)
 
         with col1:
@@ -60,7 +54,7 @@ def display_settings_ui(parents, enfants):
                     st.session_state.projection_settings[prenom]['duree_etudes'] = st.number_input(f"Durée des études de {prenom} (ans)", 1, 8, st.session_state.projection_settings[prenom]['duree_etudes'], key=f"duree_{prenom}")
                     st.session_state.projection_settings[prenom]['cout_etudes_annuel'] = st.number_input(f"Coût annuel des études de {prenom} (€)", 0, 50000, st.session_state.projection_settings[prenom].get('cout_etudes_annuel', 10000), step=500, key=f"cout_etudes_{prenom}")
                     st.markdown("---")
-    return duree_projection, st.session_state.projection_settings
+    return st.session_state.projection_settings
 
 def display_gantt_chart(gantt_data, duree_projection, parents, enfants):
     """Affiche la frise chronologique (diagramme de Gantt)."""
@@ -94,6 +88,27 @@ def display_loan_crd_chart(df_projection, passifs):
     # 2. Création du graphique
     fig = px.bar(df_crd, x=df_crd.index, y=df_crd.columns, title="Répartition du Capital Restant Dû par Emprunt", labels={'value': "Capital Restant Dû (€)", 'index': "Année", 'variable': 'Prêt'})
     fig.update_layout(barmode='stack', yaxis_title="Capital Restant Dû (€)", xaxis_title="Année", legend_title_text='Prêts')
+
+    # 3. Ajouter les montants totaux au sommet de chaque barre
+    # Calculer les totaux par année
+    totaux_par_annee = df_crd.sum(axis=1)
+    
+    # Ajouter les annotations avec les montants en k€
+    for annee, total in totaux_par_annee.items():
+        if total > 0:  # Seulement si il y a un montant à afficher
+            fig.add_annotation(
+                x=annee,
+                y=total,
+                text=f"<b>{total/1000:.0f}k€</b>",
+                showarrow=False,
+                font=dict(color="black", size=12, family="Arial Black"),
+                bgcolor="rgba(255,255,255,0.8)",  # Fond blanc semi-transparent
+                bordercolor="black",
+                borderwidth=1,
+                xanchor='center',
+                yanchor='bottom',
+                yshift=5  # Décalage vers le haut
+            )
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -234,36 +249,110 @@ def display_cumulative_tax_at_retirement(df_projection, parents, settings):
 def display_retirement_transition_analysis(df_projection, parents, settings):
     """Affiche l'analyse de la transition vers la retraite avec graphiques en barres et KPI."""
     st.subheader("🔍 Transition vers la retraite")
-    st.markdown("Comparaison de la situation financière entre le dernier mois d'activité (décembre N-1) et le premier mois de retraite (janvier N).")
     
     if not parents:
         st.info("Aucun parent renseigné pour l'analyse de transition.")
         return
     
-    # Trouver l'année de départ à la retraite (prendre le premier parent)
-    premier_parent = parents[0]
-    prenom = premier_parent.get('prenom')
-    dob = premier_parent.get('date_naissance')
-    
-    if not prenom or not dob or prenom not in settings:
-        st.warning("Informations manquantes pour calculer l'année de départ à la retraite.")
+    if df_projection.empty:
+        st.warning("Aucune donnée de projection disponible pour l'analyse.")
         return
     
-    age_retraite = settings[prenom]['retraite']
-    annee_retraite = dob.year + age_retraite
-    annee_avant_retraite = annee_retraite - 1
+    # Identifier les années de départ à la retraite des parents
+    annees_retraite = []
+    for parent in parents:
+        prenom = parent.get('prenom')
+        dob = parent.get('date_naissance')
+        
+        if prenom and dob and prenom in settings:
+            age_retraite = settings[prenom]['retraite']
+            annee_retraite = dob.year + age_retraite
+            annees_retraite.append((annee_retraite, prenom))
     
-    st.info(f"📅 Analyse basée sur le départ à la retraite de **{prenom}** en **janvier {annee_retraite}** (à {age_retraite} ans)")
-    st.caption(f"Comparaison : **Année {annee_avant_retraite}** (dernière année d'activité) vs **Année {annee_retraite}** (première année de retraite)")
-    st.markdown(f"💡 *Équivalent à comparer Décembre {annee_avant_retraite} vs Janvier {annee_retraite} en termes de revenus mensuels*")
+    if not annees_retraite:
+        st.warning("Informations manquantes pour calculer les années de départ à la retraite.")
+        return
     
-    # Filtrer les données pour les deux années clés
+    # Trier les années de retraite
+    annees_retraite.sort()
+    premiere_retraite = annees_retraite[0][0]
+    
+    # Créer les options pour les selectbox
+    annees_disponibles = sorted(df_projection['Année'].unique())
+    
+    # Options pour l'année 1 (situation actuelle et années avant départs)
+    options_annee1 = {}
+    annee_actuelle = min(annees_disponibles)
+    options_annee1[f"Situation actuelle ({annee_actuelle})"] = annee_actuelle
+    
+    # Ajouter les années avant chaque départ à la retraite
+    for annee_retraite, prenom in annees_retraite:
+        annee_avant_retraite = annee_retraite - 1
+        if annee_avant_retraite in annees_disponibles and annee_avant_retraite != annee_actuelle:
+            if len(annees_retraite) == 1:
+                # Un seul parent
+                options_annee1[f"Année avant départ ({annee_avant_retraite})"] = annee_avant_retraite
+            else:
+                # Plusieurs parents - spécifier le nom
+                options_annee1[f"Avant retraite de {prenom} ({annee_avant_retraite})"] = annee_avant_retraite
+    
+    # Options pour l'année 2 (années après les départs à la retraite)
+    options_annee2 = {}
+    for annee_retraite, prenom in annees_retraite:
+        if annee_retraite in annees_disponibles:
+            if len(annees_retraite) == 1:
+                options_annee2[f"Première année de retraite ({annee_retraite})"] = annee_retraite
+            else:
+                options_annee2[f"Retraite de {prenom} ({annee_retraite})"] = annee_retraite
+    
+    # Ajouter les années suivantes si disponibles
+    for annee in annees_disponibles:
+        if annee > premiere_retraite and annee not in [ar[0] for ar in annees_retraite]:
+            options_annee2[f"Année {annee}"] = annee
+    
+    if not options_annee2:
+        st.warning("Aucune année de retraite disponible dans les données de projection.")
+        return
+    
+    # Interface de sélection des années
+    st.markdown("### � Sélection des années à comparer")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        annee1_key = st.selectbox(
+            "Année 1 (référence)",
+            options=list(options_annee1.keys()),
+            index=0,
+            key="transition_annee1_selectbox",
+            help="Choisissez l'année de référence (situation avant retraite)"
+        )
+        annee1 = options_annee1[annee1_key]
+    
+    with col2:
+        annee2_key = st.selectbox(
+            "Année 2 (comparaison)",
+            options=list(options_annee2.keys()),
+            index=0,
+            key="transition_annee2_selectbox",
+            help="Choisissez l'année de comparaison (situation après retraite)"
+        )
+        annee2 = options_annee2[annee2_key]
+    
+    # Vérifier que les années sont différentes
+    if annee1 == annee2:
+        st.error("⚠️ Veuillez sélectionner deux années différentes pour la comparaison.")
+        return
+    
+    st.info(f"📊 **Comparaison sélectionnée :** {annee1_key} vs {annee2_key}")
+    
+    # Filtrer les données pour les deux années sélectionnées
     df_transition = df_projection[
-        df_projection['Année'].isin([annee_avant_retraite, annee_retraite])
+        df_projection['Année'].isin([annee1, annee2])
     ].copy()
     
     if df_transition.empty:
-        st.warning(f"Aucune donnée disponible pour les années {annee_avant_retraite} et {annee_retraite}.")
+        st.warning(f"Aucune donnée disponible pour les années {annee1} et {annee2}.")
         return
     
     # Préparer les données pour le graphique (conversion en montants mensuels)
@@ -282,10 +371,10 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     donnees_graphique = []
     for _, row in df_transition.iterrows():
         annee = int(row['Année'])
-        if annee == annee_avant_retraite:
-            label_annee = f"Année {annee}\n(Dernière année d'activité)"
+        if annee == annee1:
+            label_annee = f"Année {annee}\n({annee1_key.split('(')[0].strip()})"
         else:
-            label_annee = f"Année {annee}\n(Première année de retraite)"
+            label_annee = f"Année {annee}\n({annee2_key.split('(')[0].strip()})"
         
         # Conversion des montants annuels en mensuels et empilement
         # Logique identique aux graphiques de projection : empiler toutes les composantes
@@ -339,10 +428,10 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     revenus = []
     for _, row in df_transition.iterrows():
         annee = int(row['Année'])
-        if annee == annee_avant_retraite:
-            label_annee = f"Année {annee}\n(Dernière année d'activité)"
+        if annee == annee1:
+            label_annee = f"Année {annee}\n({annee1_key.split('(')[0].strip()})"
         else:
-            label_annee = f"Année {annee}\n(Première année de retraite)"
+            label_annee = f"Année {annee}\n({annee2_key.split('(')[0].strip()})"
         
         periodes.append(label_annee)
         revenus.append(row['Revenus du foyer'] / 12)
@@ -404,18 +493,18 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     st.plotly_chart(fig, use_container_width=True)
     
     # Calcul des KPI de comparaison (en montants mensuels)
-    data_avant = df_transition[df_transition['Année'] == annee_avant_retraite].iloc[0]
-    data_retraite = df_transition[df_transition['Année'] == annee_retraite].iloc[0]
+    data_annee1 = df_transition[df_transition['Année'] == annee1].iloc[0]
+    data_annee2 = df_transition[df_transition['Année'] == annee2].iloc[0]
     
     # Conversion en montants mensuels
-    revenus_avant_mensuel = data_avant['Revenus du foyer'] / 12
-    revenus_retraite_mensuel = data_retraite['Revenus du foyer'] / 12
-    reste_avant_mensuel = data_avant['Reste à vivre'] / 12
-    reste_retraite_mensuel = data_retraite['Reste à vivre'] / 12
+    revenus_annee1_mensuel = data_annee1['Revenus du foyer'] / 12
+    revenus_annee2_mensuel = data_annee2['Revenus du foyer'] / 12
+    reste_annee1_mensuel = data_annee1['Reste à vivre'] / 12
+    reste_annee2_mensuel = data_annee2['Reste à vivre'] / 12
     
     # Calcul des ratios
-    ratio_revenus = (revenus_retraite_mensuel / revenus_avant_mensuel) if revenus_avant_mensuel > 0 else 0
-    ratio_reste_vivre = (reste_retraite_mensuel / reste_avant_mensuel) if reste_avant_mensuel > 0 else 0
+    ratio_revenus = (revenus_annee2_mensuel / revenus_annee1_mensuel) if revenus_annee1_mensuel > 0 else 0
+    ratio_reste_vivre = (reste_annee2_mensuel / reste_annee1_mensuel) if reste_annee1_mensuel > 0 else 0
     
     # Affichage des KPI
     st.markdown("### 📊 Indicateurs de transition (montants mensuels)")
@@ -424,34 +513,34 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     
     with col1:
         st.metric(
-            label=f"Revenus {annee_avant_retraite}",
-            value=f"{revenus_avant_mensuel:,.0f} €/mois",
-            help=f"Revenus mensuels moyens pendant l'année d'activité {annee_avant_retraite}"
+            label=f"Revenus {annee1}",
+            value=f"{revenus_annee1_mensuel:,.0f} €/mois",
+            help=f"Revenus mensuels moyens pendant l'année {annee1}"
         )
     
     with col2:
-        variation_revenus = revenus_retraite_mensuel - revenus_avant_mensuel
+        variation_revenus = revenus_annee2_mensuel - revenus_annee1_mensuel
         st.metric(
-            label=f"Revenus {annee_retraite}",
-            value=f"{revenus_retraite_mensuel:,.0f} €/mois",
+            label=f"Revenus {annee2}",
+            value=f"{revenus_annee2_mensuel:,.0f} €/mois",
             delta=f"{variation_revenus:,.0f} €",
-            help=f"Revenus mensuels moyens pendant l'année de retraite {annee_retraite}"
+            help=f"Revenus mensuels moyens pendant l'année {annee2}"
         )
     
     with col3:
         st.metric(
-            label=f"Reste à vivre {annee_avant_retraite}",
-            value=f"{reste_avant_mensuel:,.0f} €/mois",
-            help=f"Capacité d'épargne mensuelle moyenne pendant l'année d'activité {annee_avant_retraite}"
+            label=f"Reste à vivre {annee1}",
+            value=f"{reste_annee1_mensuel:,.0f} €/mois",
+            help=f"Capacité d'épargne mensuelle moyenne pendant l'année {annee1}"
         )
     
     with col4:
-        variation_reste_vivre = reste_retraite_mensuel - reste_avant_mensuel
+        variation_reste_vivre = reste_annee2_mensuel - reste_annee1_mensuel
         st.metric(
-            label=f"Reste à vivre {annee_retraite}",
-            value=f"{reste_retraite_mensuel:,.0f} €/mois",
+            label=f"Reste à vivre {annee2}",
+            value=f"{reste_annee2_mensuel:,.0f} €/mois",
             delta=f"{variation_reste_vivre:,.0f} €",
-            help=f"Capacité d'épargne mensuelle moyenne pendant l'année de retraite {annee_retraite}"
+            help=f"Capacité d'épargne mensuelle moyenne pendant l'année {annee2}"
         )
     
     # Ratios
@@ -461,21 +550,21 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     with col1:
         couleur_revenus = "normal" if ratio_revenus >= 0.8 else "inverse"
         st.metric(
-            label=f"Ratio Revenus ({annee_retraite}/{annee_avant_retraite})",
+            label=f"Ratio Revenus ({annee2}/{annee1})",
             value=f"{ratio_revenus:.1%}",
             delta=f"{(ratio_revenus - 1):.1%}",
             delta_color=couleur_revenus,
-            help=f"Pourcentage de maintien des revenus mensuels entre {annee_avant_retraite} et {annee_retraite}"
+            help=f"Pourcentage de maintien des revenus mensuels entre {annee1} et {annee2}"
         )
     
     with col2:
         couleur_reste = "normal" if ratio_reste_vivre >= 0.8 else "inverse"
         st.metric(
-            label=f"Ratio Reste à vivre ({annee_retraite}/{annee_avant_retraite})",
+            label=f"Ratio Reste à vivre ({annee2}/{annee1})",
             value=f"{ratio_reste_vivre:.1%}",
             delta=f"{(ratio_reste_vivre - 1):.1%}",
             delta_color=couleur_reste,
-            help=f"Pourcentage de maintien de la capacité d'épargne mensuelle entre {annee_avant_retraite} et {annee_retraite}"
+            help=f"Pourcentage de maintien de la capacité d'épargne mensuelle entre {annee1} et {annee2}"
         )
     
     # Analyse textuelle

@@ -7,7 +7,8 @@ from core.patrimoine_logic import (
 )
 from core.charts import (
     create_patrimoine_brut_treemap, create_patrimoine_net_treemap,
-    create_patrimoine_net_donut, create_patrimoine_ideal_donut
+    create_patrimoine_net_donut, create_patrimoine_ideal_donut,
+    create_patrimoine_brut_stacked_bar, create_patrimoine_net_stacked_bar
 )
 from core.flux_logic import calculate_consumption_units, calculate_age
 
@@ -19,6 +20,15 @@ INSEE_PATRIMOINE_DECILES_2021 = {
     "D4 (40%)": 106200, "D5 (Médiane)": 177200, "D6 (60%)": 246100,
     "D7 (70%)": 328400, "D8 (80%)": 447500, "D9 (90%)": 716300,
     "D95 (9(%)": 1034600, "D99 (99%)": 2239200
+}
+
+# Patrimoine brut des ménages par décile (INSEE, enquête 2021, en euros)
+# Source : https://www.insee.fr/fr/statistiques/7627978
+INSEE_PATRIMOINE_BRUT_DECILES_2021 = {
+    "D1 (10%)": 8800, "D2 (20%)": 25600, "D3 (30%)": 52800,
+    "D4 (40%)": 134800, "D5 (Médiane)": 220300, "D6 (60%)": 305400,
+    "D7 (70%)": 409600, "D8 (80%)": 561200, "D9 (90%)": 836900,
+    "D95 (95%)": 1249200, "D99 (99%)": 2598600
 }
 
 def display_assets_ui():
@@ -188,63 +198,102 @@ def display_liabilities_ui():
             m1.metric("Mensualité estimée", f"{mensualite:,.2f} €/mois")
             m2.metric("Capital Restant Dû", f"{crd:,.2f} €")
 
+def create_patrimoine_comparison_chart(patrimoine_value, deciles_data, chart_title, color_rgb="34, 139, 34"):
+    """Crée un graphique de comparaison du patrimoine avec les déciles INSEE."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=['Votre Foyer'], x=[patrimoine_value], name='Votre Patrimoine', orientation='h',
+        marker=dict(color=f'rgba({color_rgb}, 0.8)', line=dict(color=f'rgba({color_rgb}, 1.0)', width=1)),
+        text=f"<b>{patrimoine_value:,.0f} €</b>", textposition='inside', insidetextanchor='middle'
+    ))
+
+    # Ajouter les lignes des déciles
+    for label, value in deciles_data.items():
+        fig.add_vline(
+            x=value, line_width=1, line_dash="dash", line_color="grey",
+            annotation_text=f"<b>{label.split(' ')[0]}</b><br>{value:,.0f}€",
+            annotation_position="top", annotation_font_size=9
+        )
+
+    # Configuration du graphique
+    max_range = max(patrimoine_value * 1.2, 200000)  # Au minimum 200k€ pour la lisibilité
+    fig.update_layout(
+        title_text=chart_title,
+        title_font_size=14,
+        xaxis_title="Patrimoine (€)", 
+        yaxis_title="",
+        showlegend=False, 
+        height=280, 
+        margin=dict(l=20, r=20, t=60, b=20), 
+        bargap=0.5,
+        xaxis_range=[0, max_range]
+    )
+    return fig
+
+def get_decile_position(patrimoine_value, deciles_data):
+    """Détermine le décile atteint par un patrimoine donné."""
+    for label, value in sorted(deciles_data.items(), key=lambda item: item[1], reverse=True):
+        if patrimoine_value >= value:
+            return label
+    return None
+
 def display_patrimoine_comparison_ui():
     """Affiche la comparaison du patrimoine du foyer avec les données nationales INSEE."""
     st.markdown("---")
     st.header("📊 Positionnement Patrimonial")
-    st.markdown("Cette section compare le **patrimoine net** de votre foyer à la moyenne nationale française, sur la base des données de l'INSEE (2021).")
+    st.markdown("Cette section compare le patrimoine de votre foyer à la moyenne nationale française, sur la base des données de l'INSEE (2021).")
 
-    # 1. Calcul du patrimoine net du foyer
+    # 1. Calcul du patrimoine brut et net du foyer
     total_actifs = sum(a.get('valeur', 0.0) for a in st.session_state.actifs)
     total_passifs = sum(p.get('crd_calcule', 0.0) for p in st.session_state.passifs)
     patrimoine_net_foyer = total_actifs - total_passifs
 
-    # 2. Affichage de la métrique
-    st.metric("Patrimoine Net du Foyer", f"{patrimoine_net_foyer:,.0f} €")
+    # 2. Affichage des métriques
+    col_metric1, col_metric2 = st.columns(2)
+    with col_metric1:
+        st.metric("Patrimoine Brut du Foyer", f"{total_actifs:,.0f} €")
+    with col_metric2:
+        st.metric("Patrimoine Net du Foyer", f"{patrimoine_net_foyer:,.0f} €")
 
-    # 3. Création du graphique de comparaison
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        y=['Votre Foyer'], x=[patrimoine_net_foyer], name='Votre Patrimoine Net', orientation='h',
-        marker=dict(color='rgba(34, 139, 34, 0.8)', line=dict(color='rgba(34, 139, 34, 1.0)', width=1)),
-        text=f"<b>{patrimoine_net_foyer:,.0f} €</b>", textposition='inside', insidetextanchor='middle'
-    ))
-
-    # Ajouter les lignes des déciles
-    for label, value in INSEE_PATRIMOINE_DECILES_2021.items():
-        fig.add_vline(
-            x=value, line_width=1, line_dash="dash", line_color="grey",
-            annotation_text=f"<b>{label.split(' ')[0]}</b><br>{value:,.0f}€",
-            annotation_position="top", annotation_font_size=10
+    # 3. Graphiques de comparaison côte à côte
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        st.subheader("Patrimoine Brut vs Population")
+        fig_brut = create_patrimoine_comparison_chart(
+            total_actifs, 
+            INSEE_PATRIMOINE_BRUT_DECILES_2021,
+            "Positionnement patrimoine brut",
+            "255, 140, 0"  # Orange
         )
+        st.plotly_chart(fig_brut, use_container_width=True)
+        
+        # Déterminer le décile atteint pour le patrimoine brut
+        decile_brut = get_decile_position(total_actifs, INSEE_PATRIMOINE_BRUT_DECILES_2021)
+        if decile_brut:
+            st.success(f"Votre patrimoine brut vous place au-dessus du **{decile_brut}** des foyers français.")
+        else:
+            st.info("Votre patrimoine brut se situe dans le premier décile des foyers français.")
 
-    # Déterminer le décile atteint
-    decile_atteint = None
-    for label, value in sorted(INSEE_PATRIMOINE_DECILES_2021.items(), key=lambda item: item[1], reverse=True):
-        if patrimoine_net_foyer >= value:
-            decile_atteint = label
-            break
-
-    if decile_atteint:
-        st.success(f"Votre patrimoine net vous place au-dessus du **{decile_atteint}** des foyers français.")
-    else:
-        st.info("Votre patrimoine net se situe dans le premier décile des foyers français.")
-
-    # Configuration du graphique
-    max_range = max(patrimoine_net_foyer * 1.2, 200000)  # Au minimum 200k€ pour la lisibilité
-    fig.update_layout(
-        title_text="Positionnement de votre patrimoine net par rapport aux déciles français (INSEE 2021)",
-        xaxis_title="Patrimoine net du foyer (€)", 
-        yaxis_title="",
-        showlegend=False, 
-        height=300, 
-        margin=dict(l=20, r=20, t=80, b=20), 
-        bargap=0.5,
-        xaxis_range=[0, max_range]
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    with col_chart2:
+        st.subheader("Patrimoine Net vs Population")
+        fig_net = create_patrimoine_comparison_chart(
+            patrimoine_net_foyer, 
+            INSEE_PATRIMOINE_DECILES_2021,
+            "Positionnement patrimoine net",
+            "34, 139, 34"  # Vert
+        )
+        st.plotly_chart(fig_net, use_container_width=True)
+        
+        # Déterminer le décile atteint pour le patrimoine net
+        decile_net = get_decile_position(patrimoine_net_foyer, INSEE_PATRIMOINE_DECILES_2021)
+        if decile_net:
+            st.success(f"Votre patrimoine net vous place au-dessus du **{decile_net}** des foyers français.")
+        else:
+            st.info("Votre patrimoine net se situe dans le premier décile des foyers français.")
 
     # Informations complémentaires
+    st.markdown("---")
     if patrimoine_net_foyer < 0:
         st.warning("⚠️ Votre patrimoine net est négatif. Cela signifie que vos dettes dépassent la valeur de vos actifs.")
     elif patrimoine_net_foyer == 0:
@@ -294,6 +343,11 @@ def display_summary_and_charts():
             st.plotly_chart(fig_brut, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur brute positive à afficher.")
+        
+        # Ajout du graphique en barres empilées pour le patrimoine brut
+        fig_brut_bar = create_patrimoine_brut_stacked_bar(df_patrimoine)
+        if fig_brut_bar:
+            st.plotly_chart(fig_brut_bar, use_container_width=True)
 
     with chart_col2:
         st.subheader("Répartition du Patrimoine Net")
@@ -302,6 +356,11 @@ def display_summary_and_charts():
             st.plotly_chart(fig_net, use_container_width=True)
         else:
             st.info("Aucun actif avec une valeur nette positive à afficher.")
+        
+        # Ajout du graphique en barres empilées pour le patrimoine net
+        fig_net_bar = create_patrimoine_net_stacked_bar(df_patrimoine)
+        if fig_net_bar:
+            st.plotly_chart(fig_net_bar, use_container_width=True)
 
     st.markdown("---")
     st.header("Analyse de la Répartition")

@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from datetime import date
 
@@ -25,7 +26,13 @@ def create_patrimoine_brut_treemap(df_patrimoine):
             color_discrete_map=ASSET_TYPE_COLOR_MAP,
             hover_data={'Valeur Brute': ':,.2f €'}
         )
-        fig.update_traces(textinfo='label+percent root', textfont_size=14)
+        fig.update_traces(
+            textinfo='label+percent root+value', 
+            texttemplate='<b>%{label}</b><br>%{percentRoot}<br>%{value:,.0f}k€',
+            textfont_size=12
+        )
+        # Conversion des valeurs en k€ pour l'affichage dans le template
+        fig.data[0].values = [v/1000 for v in fig.data[0].values]
         fig.update_layout(margin=dict(t=10, l=10, r=10, b=10))
         return fig
     else:
@@ -43,7 +50,13 @@ def create_patrimoine_net_treemap(df_patrimoine):
             color_discrete_map=ASSET_TYPE_COLOR_MAP,
             hover_data={'Valeur Nette': ':,.2f €'}
         )
-        fig.update_traces(textinfo='label+percent root', textfont_size=14)
+        fig.update_traces(
+            textinfo='label+percent root+value', 
+            texttemplate='<b>%{label}</b><br>%{percentRoot}<br>%{value:,.0f}k€',
+            textfont_size=12
+        )
+        # Conversion des valeurs en k€ pour l'affichage dans le template
+        fig.data[0].values = [v/1000 for v in fig.data[0].values]
         fig.update_layout(margin=dict(t=10, l=10, r=10, b=10))
         return fig
     else:
@@ -84,6 +97,174 @@ def create_patrimoine_ideal_donut():
     )
     fig.update_traces(textposition='inside', textinfo='percent+label')
     fig.update_layout(showlegend=True, legend_title_text='Catégorie', margin=dict(t=50, l=10, r=10, b=10))
+    return fig
+
+def create_patrimoine_brut_stacked_bar(df_patrimoine):
+    """Crée un graphique en barres empilées horizontales pour la répartition brute entre immobilier et financier."""
+    if df_patrimoine.empty:
+        return None
+    
+    # Regrouper les données par grandes catégories
+    immobilier_brut = df_patrimoine[
+        df_patrimoine['Type'].isin(['Immobilier de jouissance', 'Immobilier productif'])
+    ]['Valeur Brute'].sum()
+    
+    financier_brut = df_patrimoine[
+        df_patrimoine['Type'] == 'Actifs financiers'
+    ]['Valeur Brute'].sum()
+    
+    autres_brut = df_patrimoine[
+        df_patrimoine['Type'] == 'Autres actifs'
+    ]['Valeur Brute'].sum()
+    
+    total = immobilier_brut + financier_brut + autres_brut
+    
+    if total == 0:
+        return None
+    
+    # Calcul des pourcentages
+    immo_pct = (immobilier_brut / total) * 100
+    financier_pct = (financier_brut / total) * 100
+    autres_pct = (autres_brut / total) * 100
+    
+    # Création du graphique avec plotly.graph_objects pour avoir un vrai stacked bar
+    fig = go.Figure()
+    
+    # Ajouter les barres empilées
+    if immo_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Immobilier',
+            y=['Répartition'],
+            x=[immo_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[0],
+            text=f'{immo_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+    
+    if financier_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Actifs financiers',
+            y=['Répartition'],
+            x=[financier_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[2],
+            text=f'{financier_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+        
+    if autres_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Autres actifs',
+            y=['Répartition'],
+            x=[autres_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[4],
+            text=f'{autres_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+    
+    fig.update_layout(
+        title="Répartition Immobilier vs Financier (Brut)",
+        title_font_size=12,
+        barmode='stack',
+        xaxis_title="Pourcentage",
+        yaxis_title="",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=120,
+        margin=dict(t=50, l=10, r=10, b=10),
+        xaxis=dict(range=[0, 100], showgrid=False),
+        yaxis=dict(showticklabels=False)
+    )
+    
+    return fig
+
+def create_patrimoine_net_stacked_bar(df_patrimoine):
+    """Crée un graphique en barres empilées horizontales pour la répartition nette entre immobilier et financier."""
+    if df_patrimoine.empty:
+        return None
+    
+    # Regrouper les données par grandes catégories
+    immobilier_net = df_patrimoine[
+        df_patrimoine['Type'].isin(['Immobilier de jouissance', 'Immobilier productif'])
+    ]['Valeur Nette'].sum()
+    
+    financier_net = df_patrimoine[
+        df_patrimoine['Type'] == 'Actifs financiers'
+    ]['Valeur Nette'].sum()
+    
+    autres_net = df_patrimoine[
+        df_patrimoine['Type'] == 'Autres actifs'
+    ]['Valeur Nette'].sum()
+    
+    total = immobilier_net + financier_net + autres_net
+    
+    if total <= 0:
+        return None
+    
+    # Calcul des pourcentages
+    immo_pct = (immobilier_net / total) * 100
+    financier_pct = (financier_net / total) * 100
+    autres_pct = (autres_net / total) * 100
+    
+    # Création du graphique avec plotly.graph_objects pour avoir un vrai stacked bar
+    fig = go.Figure()
+    
+    # Ajouter les barres empilées
+    if immo_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Immobilier',
+            y=['Répartition'],
+            x=[immo_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[0],
+            text=f'{immo_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+    
+    if financier_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Actifs financiers',
+            y=['Répartition'],
+            x=[financier_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[2],
+            text=f'{financier_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+        
+    if autres_pct > 0:
+        fig.add_trace(go.Bar(
+            name='Autres actifs',
+            y=['Répartition'],
+            x=[autres_pct],
+            orientation='h',
+            marker_color=px.colors.qualitative.Vivid[4],
+            text=f'{autres_pct:.1f}%',
+            textposition='inside',
+            textfont=dict(color='white', size=12)
+        ))
+    
+    fig.update_layout(
+        title="Répartition Immobilier vs Financier (Net)",
+        title_font_size=12,
+        barmode='stack',
+        xaxis_title="Pourcentage",
+        yaxis_title="",
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=120,
+        margin=dict(t=50, l=10, r=10, b=10),
+        xaxis=dict(range=[0, 100], showgrid=False),
+        yaxis=dict(showticklabels=False)
+    )
+    
     return fig
 
 def create_gantt_chart_fig(gantt_data, duree_projection, parents, enfants):
