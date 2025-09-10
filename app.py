@@ -56,6 +56,7 @@ pg = st.navigation(
             st.Page("pages/4_Projection.py", title="Projection", icon="📈"),
         ],
         "Solutions": [
+            st.Page("pages/10_Reorganisation_Stock.py", title="Réorganisation Stock", icon="🔄"),
             st.Page("pages/9_Optimisation_PER.py", title="Optimisation PER", icon="🎯"),
             st.Page("pages/8_Simulation_Manuelle.py", title="Simulation Manuelle", icon="🕹️"),
             st.Page("pages/9_Optimisation_Patrimoniale.py", title="Optimisation Globale", icon="💫"),
