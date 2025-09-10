@@ -59,14 +59,15 @@ with st.sidebar:
         st.session_state.projection_calculated = False
         st.rerun()
     
-    st.markdown("---")
-    st.markdown("### 📋 Instructions")
-    st.markdown("""
-    1. **Ajustez** la durée de projection
-    2. **Configurez** les paramètres ci-dessous
-    3. **Cliquez** sur "Calculer la Projection"
-    4. **Analysez** les résultats obtenus
-    """)
+    if(False):    
+        st.markdown("---")
+        st.markdown("### 📋 Instructions")
+        st.markdown("""
+        1. **Ajustez** la durée de projection
+        2. **Configurez** les paramètres ci-dessous
+        3. **Cliquez** sur "Calculer la Projection"
+        4. **Analysez** les résultats obtenus
+        """)
 
 settings = display_settings_ui(parents, enfants)
 

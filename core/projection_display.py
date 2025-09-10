@@ -459,7 +459,7 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     # Réduire la largeur des barres pour l'esthétique (seulement les barres, pas les scatter)
     fig.update_traces(width=0.5, selector=dict(type='bar'))
     
-    # Ajouter les valeurs au centre de chaque barre
+    # Ajouter les valeurs au centre de chaque barre (solution anti-superposition avancée)
     # Calculer les positions Y pour centrer le texte dans chaque segment
     for periode in df_graph['Période'].unique():
         df_periode = df_graph[df_graph['Période'] == periode].copy()
@@ -468,27 +468,111 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         df_periode['ordre'] = df_periode['Type'].map({cat: i for i, cat in enumerate(categories_ordre)})
         df_periode = df_periode.sort_values('ordre')
         
-        # Calculer les positions Y cumulées pour centrer le texte
+        # Calculer le total pour cette période pour déterminer la stratégie d'affichage
+        total_periode = df_periode['Montant'].sum()
+        
+        # Calculer les positions Y cumulées et déterminer quels montants afficher
         cumul = 0
+        annotations_a_afficher = []
+        
         for _, row in df_periode.iterrows():
             montant = row['Montant']
             if montant > 0:  # Seulement pour les montants positifs
                 # Position Y au centre du segment
                 y_position = cumul + (montant / 2)
                 
-                # Ajouter l'annotation avec police plus grande
-                fig.add_annotation(
-                    x=periode,
-                    y=y_position,
-                    text=f"{montant:,.0f}€",
-                    showarrow=False,
-                    font=dict(color="white", size=14, family="Arial Black"),
-                    bgcolor="rgba(0,0,0,0.3)",  # Fond semi-transparent pour la lisibilité
-                    bordercolor="white",
-                    borderwidth=1
-                )
+                # Calculer la hauteur du segment pour déterminer si on peut afficher
+                hauteur_segment = montant
+                pourcentage_du_total = (montant / total_periode) * 100 if total_periode > 0 else 0
+                
+                # Critères d'affichage plus stricts pour éviter les superpositions
+                afficher_montant = False
+                font_size = 10
+                
+                if hauteur_segment >= 300 and pourcentage_du_total >= 15:
+                    # Segments larges et significatifs
+                    afficher_montant = True
+                    font_size = 12
+                elif hauteur_segment >= 200 and pourcentage_du_total >= 10:
+                    # Segments moyens
+                    afficher_montant = True
+                    font_size = 10
+                elif hauteur_segment >= 150 and pourcentage_du_total >= 8:
+                    # Petits segments mais encore lisibles
+                    afficher_montant = True
+                    font_size = 9
+                
+                # Formater le montant selon sa taille
+                if montant >= 1000:
+                    text_montant = f"{montant/1000:.1f}k€"
+                else:
+                    text_montant = f"{montant:.0f}€"
+                
+                if afficher_montant:
+                    annotations_a_afficher.append({
+                        'x': periode,
+                        'y': y_position,
+                        'text': text_montant,
+                        'font_size': font_size,
+                        'hauteur': hauteur_segment
+                    })
                 
                 cumul += montant
+        
+        # Vérifier et ajuster les annotations pour éviter les superpositions
+        # Trier par position Y pour détecter les conflits
+        annotations_a_afficher.sort(key=lambda x: x['y'])
+        
+        # Filtrer les annotations trop proches (éviter superposition)
+        annotations_finales = []
+        derniere_y = -1000  # Position très basse pour commencer
+        
+        for ann in annotations_a_afficher:
+            # Distance minimale entre les annotations (en pixels approximatifs)
+            distance_min = 40  # Ajustable selon la hauteur du graphique
+            
+            if ann['y'] - derniere_y >= distance_min:
+                annotations_finales.append(ann)
+                derniere_y = ann['y']
+            elif len(annotations_finales) == 0:
+                # Garder au moins une annotation si c'est la première
+                annotations_finales.append(ann)
+                derniere_y = ann['y']
+        
+        # Si on a trop peu d'annotations visibles, garder les plus importantes
+        if len(annotations_finales) < len(annotations_a_afficher) and len(annotations_finales) < 3:
+            # Reprendre les 2-3 segments les plus importants
+            annotations_importantes = sorted(annotations_a_afficher, 
+                                           key=lambda x: x['hauteur'], 
+                                           reverse=True)[:3]
+            
+            # Espacer verticalement ces annotations importantes
+            if len(annotations_importantes) > 1:
+                annotations_finales = []
+                for i, ann in enumerate(annotations_importantes):
+                    # Espacer les annotations sur la hauteur disponible
+                    espacement = total_periode / (len(annotations_importantes) + 1)
+                    nouvelle_y = espacement * (i + 1)
+                    ann['y'] = nouvelle_y
+                    annotations_finales.append(ann)
+            else:
+                annotations_finales = annotations_importantes
+        
+        # Ajouter les annotations finales au graphique
+        for ann in annotations_finales:
+            fig.add_annotation(
+                x=ann['x'],
+                y=ann['y'],
+                text=f"<b>{ann['text']}</b>",
+                showarrow=False,
+                font=dict(color="white", size=ann['font_size'], family="Arial Black"),
+                bgcolor="rgba(0,0,0,0.6)",  # Fond plus opaque
+                bordercolor="white",
+                borderwidth=1,
+                borderpad=3,
+                xanchor='center',
+                yanchor='middle'
+            )
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -582,3 +666,152 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         st.warning(f"⚠️ **Capacité d'épargne réduite** : Le reste à vivre mensuel représente {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
     else:
         st.error(f"🚨 **Capacité d'épargne fortement impactée** : Le reste à vivre mensuel ne représente que {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
+    
+    # Tableau détaillé de comparaison
+    st.markdown("### 📋 Détail de la comparaison par catégorie (montants mensuels)")
+    
+    # Préparation des données pour le tableau
+    # Colonnes d'intérêt et leurs libellés - toutes les catégories du graphique
+    colonnes_comparaison = {
+        # Revenus
+        'Revenus bruts du foyer': '💼 Salaires et pensions',
+        'Loyers perçus': '�️ Revenus locatifs',
+        'Autres revenus': '💰 Autres revenus',
+        'Revenus du foyer': '📊 TOTAL REVENUS',
+        # Charges et dépenses (toutes les catégories du graphique)
+        'Mensualités Prêts': '🏠 Mensualités Prêts',
+        'Charges Immobilières': '🔧 Charges Immobilières',
+        'Taxes Foncières': '🏛️ Taxes Foncières',
+        'Autres Dépenses': '🛒 Autres Dépenses',
+        'Coût des études': '🎓 Coût des études',
+        'Impôt sur le revenu': '💸 Impôt sur le revenu',
+        'Prélèvements Sociaux': '🏥 Prélèvements Sociaux',
+        # Totaux et résultats
+        'Total charges': '📊 TOTAL CHARGES',
+        'Reste à vivre': '💎 RESTE À VIVRE'
+    }
+    
+    # Création du tableau de comparaison
+    data_tableau = []
+    
+    for colonne, libelle in colonnes_comparaison.items():
+        if colonne in data_annee1.index and colonne in data_annee2.index:
+            montant_annuel_annee1 = data_annee1[colonne]
+            montant_annuel_annee2 = data_annee2[colonne]
+            
+            # Conversion en montants mensuels
+            montant_mensuel_annee1 = montant_annuel_annee1 / 12
+            montant_mensuel_annee2 = montant_annuel_annee2 / 12
+            
+            # Calcul de la variation mensuelle
+            variation_mensuelle = montant_mensuel_annee2 - montant_mensuel_annee1
+            variation_pourcentage = (variation_mensuelle / montant_mensuel_annee1 * 100) if montant_mensuel_annee1 != 0 else 0
+            
+            # Déterminer le type de ligne pour le style
+            is_total_line = 'TOTAL' in colonne or 'RESTE À VIVRE' in colonne
+            
+            data_tableau.append({
+                'Catégorie': libelle,
+                f'{annee1} (€/mois)': f"{montant_mensuel_annee1:,.0f}",
+                f'{annee2} (€/mois)': f"{montant_mensuel_annee2:,.0f}",
+                'Variation (€/mois)': f"{variation_mensuelle:+,.0f}",
+                'Variation (%)': f"{variation_pourcentage:+.1f}%",
+                'is_total': is_total_line
+            })
+    
+    df_tableau = pd.DataFrame(data_tableau)
+    
+    # Séparer les données par type pour un meilleur affichage
+    df_revenus = df_tableau[df_tableau['Catégorie'].str.contains('💼|�️|💰|📊.*REVENUS')]
+    df_charges = df_tableau[df_tableau['Catégorie'].str.contains('🏠|🔧|🏛️|🛒|🎓|💸|🏥')]
+    df_totaux = df_tableau[df_tableau['Catégorie'].str.contains('📊.*CHARGES|💎')]
+    
+    # Fonction de style pour le tableau
+    def style_tableau_complet(df):
+        """Applique un style selon le type de ligne"""
+        styles = []
+        for _, row in df.iterrows():
+            if row.get('is_total', False):
+                styles.append(['background-color: #f0f0f0; font-weight: bold'] * (len(row) - 1))
+            else:
+                styles.append([''] * (len(row) - 1))
+        return styles
+    
+    def color_variation(val):
+        """Colore les variations selon leur signe"""
+        if isinstance(val, str):
+            if val.startswith('+') and not val.startswith('+0'):
+                return 'color: green; font-weight: bold'
+            elif val.startswith('-'):
+                return 'color: red; font-weight: bold'
+        return ''
+    
+    # Affichage des tableaux par section avec largeurs de colonnes optimisées
+    if not df_revenus.empty:
+        st.markdown("#### 💰 Revenus")
+        df_revenus_display = df_revenus.drop('is_total', axis=1)
+        styled_revenus = df_revenus_display.style.apply(
+            lambda x: ['background-color: #f0f0f0; font-weight: bold'] * len(x) if '📊' in x['Catégorie'] else [''] * len(x), 
+            axis=1
+        )
+        styled_revenus = styled_revenus.applymap(color_variation, subset=['Variation (€/mois)', 'Variation (%)'])
+        
+        st.dataframe(
+            styled_revenus, 
+            use_container_width=False,
+            hide_index=True,
+            column_config={
+                "Catégorie": st.column_config.TextColumn("Catégorie", width="medium"),
+                f"{annee1} (€/mois)": st.column_config.TextColumn(f"{annee1} (€/mois)", width="small"),
+                f"{annee2} (€/mois)": st.column_config.TextColumn(f"{annee2} (€/mois)", width="small"),
+                "Variation (€/mois)": st.column_config.TextColumn("Variation (€/mois)", width="small"),
+                "Variation (%)": st.column_config.TextColumn("Variation (%)", width="small")
+            }
+        )
+    
+    if not df_charges.empty:
+        st.markdown("#### 💳 Charges et dépenses")
+        df_charges_display = df_charges.drop('is_total', axis=1)
+        styled_charges = df_charges_display.style.apply(lambda x: [''] * len(x), axis=1)
+        styled_charges = styled_charges.applymap(color_variation, subset=['Variation (€/mois)', 'Variation (%)'])
+        
+        st.dataframe(
+            styled_charges, 
+            use_container_width=False,
+            hide_index=True,
+            column_config={
+                "Catégorie": st.column_config.TextColumn("Catégorie", width="medium"),
+                f"{annee1} (€/mois)": st.column_config.TextColumn(f"{annee1} (€/mois)", width="small"),
+                f"{annee2} (€/mois)": st.column_config.TextColumn(f"{annee2} (€/mois)", width="small"),
+                "Variation (€/mois)": st.column_config.TextColumn("Variation (€/mois)", width="small"),
+                "Variation (%)": st.column_config.TextColumn("Variation (%)", width="small")
+            }
+        )
+    
+    if not df_totaux.empty:
+        st.markdown("#### 📊 Synthèse")
+        df_totaux_display = df_totaux.drop('is_total', axis=1)
+        styled_totaux = df_totaux_display.style.apply(
+            lambda x: ['background-color: #f0f0f0; font-weight: bold'] * len(x), axis=1
+        )
+        styled_totaux = styled_totaux.applymap(color_variation, subset=['Variation (€/mois)', 'Variation (%)'])
+        
+        st.dataframe(
+            styled_totaux, 
+            use_container_width=False,
+            hide_index=True,
+            column_config={
+                "Catégorie": st.column_config.TextColumn("Catégorie", width="medium"),
+                f"{annee1} (€/mois)": st.column_config.TextColumn(f"{annee1} (€/mois)", width="small"),
+                f"{annee2} (€/mois)": st.column_config.TextColumn(f"{annee2} (€/mois)", width="small"),
+                "Variation (€/mois)": st.column_config.TextColumn("Variation (€/mois)", width="small"),
+                "Variation (%)": st.column_config.TextColumn("Variation (%)", width="small")
+            }
+        )
+    
+    # Note explicative
+    st.caption(
+        f"💡 **Note :** Ce tableau compare les montants mensuels entre {annee1} (dernière année avant retraite) "
+        f"et {annee2} (première année de retraite complète). Les variations positives sont en vert, "
+        f"les négatives en rouge. Toutes les catégories correspondent exactement aux segments du graphique ci-dessus."
+    )
