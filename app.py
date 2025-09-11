@@ -62,6 +62,7 @@ pg = st.navigation(
             st.Page("pages/9_Optimisation_Patrimoniale.py", title="Optimisation Globale", icon="💫"),
         ],
         "Outils": [
+            st.Page("pages/11_Export_Graphiques.py", title="Export Graphiques", icon="📊"),
             st.Page("pages/99_Debug.py", title="Debug - Session State", icon="🐛"),
         ]
     }, position='top'
