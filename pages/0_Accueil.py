@@ -4,17 +4,31 @@ import streamlit as st
 st.title("Outil d'Audit Patrimonial 💰")
 
 st.markdown("""
-Bienvenue dans votre assistant d'audit patrimonial.
+Bienvenue dans votre assistant d'audit patrimonial complet.
 
-Cette application vous permettra de :
-1.  **Définir la composition de votre foyer** (parents et enfants).
-2.  **Détailler votre patrimoine** (actifs et passifs).
-3.  (Prochainement) **Projeter vos flux financiers** et anticiper les événements clés de votre vie.
+Cette application vous permet de :
 
-**👈 Utilisez le menu de navigation sur la gauche pour commencer.**
+### 🏠 **Audit Complet**
+1. **Définir la composition de votre foyer** - Configurez votre famille (parents et enfants)
+2. **Analyser votre patrimoine** - Détaillez vos actifs et passifs avec visualisations
+3. **Projeter vos flux financiers** - Anticipez revenus, dépenses et événements futurs
+4. **Optimiser votre fiscalité** - Simulations et conseils d'optimisation
+
+### 📊 **Fonctionnalités Avancées**
+- **Visualisations interactives** de votre patrimoine et projections
+- **Simulations fiscales** avec OpenFisca-France
+- **Rapports détaillés** de votre situation patrimoniale
+- **Optimisation PER** et stratégies d'investissement
+- **Capacité d'endettement** et simulations de crédit
+
+### 💾 **Gestion des Données**
+- **Sauvegarde/Chargement** de vos données
+- **Import/Export** de vos analyses
+
+**👈 Utilisez le menu de navigation sur la gauche pour commencer votre audit.**
 
 ---
-*Cette application utilisera à terme [OpenFisca-France](https://github.com/openfisca/openfisca-france) pour des calculs de fiscalité précis.*
+*Application utilisant [OpenFisca-France](https://github.com/openfisca/openfisca-france) pour des calculs fiscaux précis et à jour.*
 """)
 
 # Afficher les données actuelles (utile pour le débogage)
