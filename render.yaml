@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: audit-patrimonial
+    runtime: python
+    repo: https://github.com/jean-phi66/00_Audit_Patrimonial_new.git
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    plan: free
+    envVars:
+      - key: STREAMLIT_SERVER_HEADLESS
+        value: "true"
+      - key: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+        value: "false"
+      - key: STREAMLIT_SERVER_PORT
+        value: "$PORT"
+      - key: STREAMLIT_SERVER_ADDRESS
+        value: "0.0.0.0"
