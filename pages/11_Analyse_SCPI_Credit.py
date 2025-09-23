@@ -22,8 +22,6 @@ with st.sidebar:
         montant = st.number_input("**Montant**", value=50000, step=1000, format="%d")
         st.markdown("</div>", unsafe_allow_html=True)
     
-    st.markdown("---")
-    
     div_col1, div_col2 = st.columns(2)
     with div_col1:
         dividende_net = st.number_input("Dividende net distribué", value=5.70, step=0.1, format="%.2f")
@@ -85,10 +83,12 @@ with st.sidebar:
     else:
         mensualite_differe = 0  # Aucun remboursement pendant le différé total
     
-    st.write(f"**Mensualité SCPI hors assurance avec différé {nb_mois_differe} mois:** {mensualite_hors_assurance:,.2f} €")
-    st.write(f"**Mensualité SCPI avec assurance avec différé {nb_mois_differe} mois:** {mensualite_avec_assurance:,.2f} €")
-    if nb_mois_differe > 0:
-        st.write(f"**Mensualité pendant le différé ({type_differe.lower()}):** {mensualite_differe:,.2f} €")
+    # Affichage des mensualités dans un expander
+    with st.expander("💰 **Détail des mensualités**", expanded=False):
+        st.write(f"**Mensualité SCPI hors assurance avec différé {nb_mois_differe} mois:** {mensualite_hors_assurance:,.2f} €")
+        st.write(f"**Mensualité SCPI avec assurance avec différé {nb_mois_differe} mois:** {mensualite_avec_assurance:,.2f} €")
+        if nb_mois_differe > 0:
+            st.write(f"**Mensualité pendant le différé ({type_differe.lower()}):** {mensualite_differe:,.2f} €")
 
     # Section Fiscalité
     st.markdown("### 📊 **Fiscalité**")
