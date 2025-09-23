@@ -139,6 +139,7 @@ def display_reorganisation_summary():
     """Affiche le résumé de la réorganisation"""
     st.subheader("📈 Résumé de la réorganisation")
     
+    # Calculs de base
     total_patrimoine_financier = sum(item['valeur'] for item in st.session_state.reorganisation_data)
     total_reorientable = sum(
         item['montant_reorientable'] 
@@ -146,6 +147,13 @@ def display_reorganisation_summary():
         if item['reorientable']
     )
     
+    # Calcul de l'épargne bloquée (actifs non sélectionnés pour réorientation)
+    epargne_bloquee = total_patrimoine_financier - total_reorientable
+    
+    # Calcul du stock mobilisable après déduction des réserves
+    stock_mobilisable = max(0, total_reorientable - st.session_state.epargne_precaution - st.session_state.reserve_projet)
+    
+    # Calcul du pourcentage réorientable
     if total_patrimoine_financier == 0:
         pourcentage_reorientable = 0
     else:
@@ -197,9 +205,6 @@ def display_reorganisation_summary():
         st.markdown("---")
         st.markdown("### 🛡️ Gestion des réserves et stock mobilisable")
     
-    # Calcul du stock mobilisable
-    stock_mobilisable = max(0, total_reorientable - st.session_state.epargne_precaution - st.session_state.reserve_projet)
-    
     # Organisation en 3 colonnes : inputs à gauche, espace au milieu, KPIs à droite
     reserve_col, espace_col, kpi_col = st.columns([1, 0.2, 2])
     
@@ -223,6 +228,9 @@ def display_reorganisation_summary():
             help="Montant à réserver pour des projets futurs"
         )
     
+    # Calcul du stock mobilisable APRÈS la mise à jour des inputs
+    stock_mobilisable = max(0, total_reorientable - st.session_state.epargne_precaution - st.session_state.reserve_projet)
+    
     with kpi_col:
         st.markdown("#### Indicateurs patrimoniaux")
         
@@ -232,21 +240,22 @@ def display_reorganisation_summary():
         with kpi_row1_col1:
             st.metric(
                 "💰 Stock financier total",
-                f"{total_patrimoine_financier:,.2f} €"
+                f"{total_patrimoine_financier:,.2f} €",
+                help="Somme de tous vos actifs financiers"
             )
         
         with kpi_row1_col2:
-            # Calcul de l'épargne bloquée (non réorientable)
-            epargne_bloquee = total_patrimoine_financier - total_reorientable
             st.metric(
                 "🔒 Épargne bloquée",
-                f"{epargne_bloquee:,.2f} €"
+                f"{epargne_bloquee:,.2f} €",
+                help="Actifs financiers non sélectionnés pour réorientation"
             )
         
         with kpi_row1_col3:
             st.metric(
                 "💼 Stock réorientable",
-                f"{total_reorientable:,.2f} €"
+                f"{total_reorientable:,.2f} €",
+                help="Montant sélectionné pour réorientation"
             )
         
         # Deuxième ligne : déductions et résultat final
@@ -255,22 +264,38 @@ def display_reorganisation_summary():
         with kpi_row2_col1:
             st.metric(
                 "🛡️ Épargne de précaution",
-                f"- {st.session_state.epargne_precaution:,.2f} €"
+                f"{st.session_state.epargne_precaution:,.2f} €",
+                help="Montant à déduire du stock réorientable pour la sécurité"
             )
         
         with kpi_row2_col2:
             st.metric(
                 "🏗️ Réserve projet",
-                f"- {st.session_state.reserve_projet:,.2f} €"
+                f"{st.session_state.reserve_projet:,.2f} €",
+                help="Montant à déduire du stock réorientable pour vos projets"
             )
         
         with kpi_row2_col3:
+            # Calcul du pourcentage du stock mobilisable par rapport au stock financier total
+            if total_patrimoine_financier > 0:
+                pourcentage_mobilisable = (stock_mobilisable / total_patrimoine_financier) * 100
+            else:
+                pourcentage_mobilisable = 0
+            
             # Couleur selon le montant disponible
             delta_color = "normal" if stock_mobilisable > 0 else "inverse"
+            
+            # Affichage du delta avec le pourcentage
+            if stock_mobilisable >= 0:
+                delta_text = f"{pourcentage_mobilisable:.1f}% du total"
+            else:
+                delta_text = "Réserves trop élevées"
+            
             st.metric(
                 "🚀 **STOCK MOBILISABLE**",
                 f"{stock_mobilisable:,.2f} €",
-                delta=f"{((stock_mobilisable / total_reorientable * 100) if total_reorientable > 0 else 0):.1f}% du total" if stock_mobilisable >= 0 else "Réserves trop élevées"
+                delta=delta_text,
+                help=f"Stock réorientable ({total_reorientable:,.2f} €) - Épargne de précaution ({st.session_state.epargne_precaution:,.2f} €) - Réserve projet ({st.session_state.reserve_projet:,.2f} €)"
             )
     
     # Message informatif

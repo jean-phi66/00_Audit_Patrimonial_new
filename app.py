@@ -58,8 +58,7 @@ pg = st.navigation(
         "Solutions": [
             st.Page("pages/10_Reorganisation_Stock.py", title="Réorganisation Stock", icon="🔄"),
             st.Page("pages/9_Optimisation_PER.py", title="Optimisation PER", icon="🎯"),
-            st.Page("pages/8_Simulation_Manuelle.py", title="Simulation Manuelle", icon="🕹️"),
-            st.Page("pages/9_Optimisation_Patrimoniale.py", title="Optimisation Globale", icon="💫"),
+            st.Page("pages/11_Analyse_SCPI_Credit.py", title="Analyse SCPI à Crédit", icon="🏢"),
         ],
         "Outils": [
             st.Page("pages/99_Debug.py", title="Debug - Session State", icon="🐛"),

@@ -6,6 +6,8 @@ st.title("Outil d'Audit Patrimonial 💰")
 st.markdown("""
 Bienvenue dans votre assistant d'audit patrimonial complet.
 
+NOUVELLE VERSION 2.0 avec des fonctionnalités améliorées !
+
 Cette application vous permet de :
 
 ### 🏠 **Audit Complet**
