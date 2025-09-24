@@ -10,6 +10,7 @@ from core.flux_logic import (
     INSEE_DECILES_2021,
     INSEE_SAVINGS_RATE_2017
 )
+from core.charts import create_flux_treemap_mensuel, create_flux_treemap_annuel
 
 def display_revenus_ui():
     """Affiche l'interface pour la gestion des revenus."""
@@ -154,35 +155,15 @@ def display_summary():
 
             with tm_col1:
                 # Treemap Mensuel
-                fig_mensuel = px.treemap(
-                    df_treemap,
-                    path=[px.Constant(f"Revenus Mensuels ({total_revenus:,.0f} €)"), 'label'],
-                    values='montant', title="Vue Mensuelle"
-                )
-                fig_mensuel.update_traces(
-                    texttemplate='%{label}<br><b>%{value:,.0f} €</b>',
-                    hovertemplate='%{label}: %{value:,.0f} €<extra></extra>',
-                    textfont_size=14
-                )
-                fig_mensuel.update_layout(margin=dict(t=50, l=10, r=10, b=10))
-                st.plotly_chart(fig_mensuel, use_container_width=True)
+                fig_mensuel = create_flux_treemap_mensuel(data_treemap, total_revenus)
+                if fig_mensuel:
+                    st.plotly_chart(fig_mensuel, use_container_width=True)
 
             with tm_col2:
                 # Treemap Annuel
-                df_annuel = df_treemap.copy()
-                df_annuel['montant'] *= 12
-                total_revenus_annuel = total_revenus * 12
-                fig_annuel = px.treemap(
-                    df_annuel, path=[px.Constant(f"Revenus Annuels ({total_revenus_annuel:,.0f} €)"), 'label'],
-                    values='montant', title="Vue Annuelle"
-                )
-                fig_annuel.update_traces(
-                    texttemplate='%{label}<br><b>%{value:,.0f} €</b>',
-                    hovertemplate='%{label}: %{value:,.0f} €<extra></extra>',
-                    textfont_size=14
-                )
-                fig_annuel.update_layout(margin=dict(t=50, l=10, r=10, b=10))
-                st.plotly_chart(fig_annuel, use_container_width=True)
+                fig_annuel = create_flux_treemap_annuel(data_treemap, total_revenus)
+                if fig_annuel:
+                    st.plotly_chart(fig_annuel, use_container_width=True)
     else:
         st.info("Ajoutez des revenus pour visualiser leur répartition.")
 
