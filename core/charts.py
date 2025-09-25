@@ -14,27 +14,6 @@ ASSET_TYPE_COLOR_MAP = {
     'Placements financiers': px.colors.qualitative.Vivid[2], # Pour le graphique "cible"
 }
 
-# Palette de couleurs pour les flux (revenus et dépenses)
-# Couleurs cohérentes avec l'identité visuelle de l'application
-FLUX_COLOR_MAP = {
-    'Reste à vivre': '#2E8B57',           # Vert foncé (SeaGreen)
-    'Impôts et taxes': '#DC143C',         # Rouge foncé (Crimson)
-    'Remboursement de prêts': '#FF4500',  # Orange rouge (OrangeRed)
-    'Logement': '#4169E1',                # Bleu royal (RoyalBlue)
-    'Alimentation': '#32CD32',            # Vert citron (LimeGreen)
-    'Transport': '#9370DB',               # Violet moyen (MediumPurple)
-    'Dépenses courantes': '#FF8C00',      # Orange foncé (DarkOrange)
-    'Assurances': '#20B2AA',              # Turquoise clair (LightSeaGreen)
-    'Loisirs': '#FF69B4',                 # Rose chaud (HotPink)
-    'Enfants': '#FFD700',                 # Or (Gold)
-    'Santé': '#00CED1',                   # Turquoise foncé (DarkTurquoise)
-    'Épargne': '#228B22',                 # Vert forêt (ForestGreen)
-    'Autres': '#BA55D3',                  # Orchidée moyen (MediumOrchid)
-    'Revenus': '#4682B4',                 # Bleu acier (SteelBlue)
-    'Salaires': '#1E90FF',                # Bleu dodger (DodgerBlue)
-    'Allocations': '#00FF7F'              # Vert printemps (SpringGreen)
-}
-
 def create_patrimoine_brut_treemap(df_patrimoine):
     """Crée le treemap de répartition du patrimoine brut."""
     df_brut = df_patrimoine[df_patrimoine['Valeur Brute'] > 0]
@@ -374,9 +353,7 @@ def create_flux_treemap_mensuel(data_treemap, total_revenus):
     fig = px.treemap(
         df_treemap,
         path=['label'],
-        values='montant',
-        color='label',
-        color_discrete_map=FLUX_COLOR_MAP,
+        values='montant', 
         title="Vue Mensuelle"
     )
     fig.update_traces(
@@ -402,9 +379,7 @@ def create_flux_treemap_annuel(data_treemap, total_revenus):
     fig = px.treemap(
         df_annuel, 
         path=['label'],
-        values='montant',
-        color='label',
-        color_discrete_map=FLUX_COLOR_MAP,
+        values='montant', 
         title="Vue Annuelle"
     )
     fig.update_traces(
