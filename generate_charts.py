@@ -845,6 +845,207 @@ def create_flux_summary_annuel_image(data, output_dir):
     print(f"✅ Image tableaux Revenus/Charges ANNUELS générée : {output_path}")
 
 
+def create_positionnement_foyer_image(data, output_dir):
+    """Crée le graphique de positionnement du foyer par rapport aux déciles INSEE.
+    Utilise exactement le même code que le GUI."""
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    from matplotlib.patches import Rectangle
+    import numpy as np
+    from datetime import date
+    
+    # Import des fonctions et constantes du GUI
+    from core.flux_logic import INSEE_DECILES_2021, calculate_consumption_units, calculate_age, find_decile
+    
+    # Données du foyer
+    revenus = data.get('revenus', [])
+    depenses = data.get('depenses', [])
+    parents = data.get('parents', [])
+    enfants = data.get('enfants', [])
+    
+    # Conversion du format date Streamlit vers datetime si nécessaire
+    def parse_date_field(date_field):
+        if isinstance(date_field, dict) and '_type' in date_field and date_field['_type'] == 'date':
+            from datetime import datetime
+            return datetime.strptime(date_field['value'], '%Y-%m-%d').date()
+        return date_field
+    
+    # Conversion des dates pour les parents et enfants
+    parents_converted = []
+    for parent in parents:
+        parent_copy = parent.copy()
+        if 'date_naissance' in parent_copy:
+            parent_copy['date_naissance'] = parse_date_field(parent_copy['date_naissance'])
+        parents_converted.append(parent_copy)
+    
+    enfants_converted = []
+    for enfant in enfants:
+        enfant_copy = enfant.copy()
+        if 'date_naissance' in enfant_copy:
+            enfant_copy['date_naissance'] = parse_date_field(enfant_copy['date_naissance'])
+        enfants_converted.append(enfant_copy)
+    
+    # 1. Calcul des unités de consommation (même code que le GUI)
+    uc = calculate_consumption_units(parents_converted, enfants_converted)
+    
+    # 2. Calcul du revenu disponible annuel (même code que le GUI)
+    total_revenus_mensuels = sum(r.get('montant', 0) for r in revenus)
+    impots_et_taxes_mensuels = sum(d.get('montant', 0.0) for d in depenses if d.get('categorie') == 'Impôts et taxes')
+    revenu_disponible_annuel = (total_revenus_mensuels - impots_et_taxes_mensuels) * 12
+    
+    if uc <= 0:
+        print("⚠️ Le nombre d'unités de consommation est de 0. Impossible de calculer le niveau de vie.")
+        return
+    
+    niveau_de_vie_foyer = revenu_disponible_annuel / uc
+    
+    # 3. Détermination du décile (même code que le GUI)
+    decile_atteint = None
+    for label, value in sorted(INSEE_DECILES_2021.items(), key=lambda item: item[1], reverse=True):
+        if niveau_de_vie_foyer >= value:
+            decile_atteint = label
+            break
+    
+    # Configuration du graphique
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.set_xlim(0, 75000)
+    ax.set_ylim(-1.5, 1.5)
+    ax.axis('off')
+    
+    # Couleurs
+    color_deciles = '#5A9BD4'  # Bleu comme dans l'image
+    color_foyer = '#2E86AB'    # Bleu plus foncé pour le foyer
+    color_text = '#333333'
+    color_light_bg = '#F8F9FA'
+    
+    # Titre principal
+    ax.text(37500, 1.2, 'Positionnement du Foyer', fontsize=20, fontweight='bold', 
+            ha='center', va='center', color=color_text)
+    
+    # Description
+    description = "Cette section compare le niveau de vie de votre foyer à la moyenne nationale française, sur la base des données de l'INSEE (2021)."
+    ax.text(37500, 0.9, description, fontsize=12, ha='center', va='center', 
+            color='#666666', style='italic')
+    
+    # Informations clés
+    y_info = 0.6
+    spacing_x = 18750
+    
+    # UC
+    ax.text(18750, y_info, f'Unités de Consommation (UC)', fontsize=12, 
+            ha='center', va='center', color='#888888')
+    ax.text(18750, y_info - 0.2, f'{uc:.2f} UC', fontsize=16, fontweight='bold',
+            ha='center', va='center', color=color_text)
+    
+    # Revenu disponible annuel
+    ax.text(37500, y_info, f'Revenu Disponible Annuel', fontsize=12,
+            ha='center', va='center', color='#888888')
+    ax.text(37500, y_info - 0.2, f'{revenu_disponible_annuel:,.0f} €', fontsize=16, fontweight='bold',
+            ha='center', va='center', color=color_text)
+    
+    # Niveau de vie par UC
+    ax.text(56250, y_info, f'Niveau de Vie par UC', fontsize=12,
+            ha='center', va='center', color='#888888')
+    ax.text(56250, y_info - 0.2, f'{niveau_de_vie_foyer:,.0f} € / an', fontsize=16, fontweight='bold',
+            ha='center', va='center', color=color_text)
+    
+    # Message de positionnement (même logique que le GUI)
+    # Fond vert pour le message - remonté plus haut
+    message_rect = Rectangle((5000, -0.15), 65000, 0.3, 
+                           facecolor='#D4F4DD', alpha=0.8, linewidth=0)
+    ax.add_patch(message_rect)
+    
+    if decile_atteint:
+        message = f"Votre niveau de vie vous place au-dessus du {decile_atteint} des foyers français."
+    else:
+        message = "Votre niveau de vie se situe dans le premier décile des foyers français."
+    
+    ax.text(37500, -0.025, message, fontsize=14, fontweight='bold', 
+            ha='center', va='center', color='#2D5016')
+    
+    # Titre de l'échelle - remonté encore plus haut
+    ax.text(37500, -0.35, 'Positionnement de votre niveau de vie par rapport aux déciles français (INSEE 2021)',
+            fontsize=14, fontweight='bold', ha='center', va='center', color=color_text)
+    
+    # Création de la barre des déciles
+    bar_y = -1.1
+    bar_height = 0.15
+    
+    # Calcul des largeurs proportionnelles pour chaque décile
+    decile_values = list(INSEE_DECILES_2021.values())
+    decile_names = list(INSEE_DECILES_2021.keys())
+    
+    # Positions pour chaque décile (espacés régulièrement)
+    positions = np.linspace(5000, 67500, len(INSEE_DECILES_2021))
+    widths = [6500] * len(INSEE_DECILES_2021)  # Largeur uniforme pour la visualisation
+    
+    # Dessiner les déciles
+    for i, (decile, value) in enumerate(INSEE_DECILES_2021.items()):
+        x_pos = positions[i] - widths[i]/2
+        
+        # Couleur spéciale si c'est le décile du foyer
+        if decile == decile_atteint:
+            color = color_foyer
+            alpha = 1.0
+        else:
+            color = color_deciles
+            alpha = 0.7
+            
+        # Rectangle du décile
+        rect = Rectangle((x_pos, bar_y), widths[i], bar_height, 
+                        facecolor=color, alpha=alpha, linewidth=1, edgecolor='white')
+        ax.add_patch(rect)
+        
+        # Étiquettes des déciles - Extraire juste D1, D2, etc.
+        decile_short = decile.split(' ')[0]  # "D1 (10%)" -> "D1"
+        ax.text(positions[i], bar_y - 0.08, decile_short, fontsize=10, 
+               ha='center', va='center', color=color_text, fontweight='bold')
+        ax.text(positions[i], bar_y - 0.15, f'{value:,.0f}€', fontsize=9, 
+               ha='center', va='center', color='#666666')
+        
+        # Ligne de séparation
+        if i < len(INSEE_DECILES_2021) - 1:
+            ax.plot([positions[i] + widths[i]/2, positions[i] + widths[i]/2], 
+                   [bar_y + bar_height + 0.02, bar_y + bar_height + 0.05], 
+                   color='#CCCCCC', linewidth=1)
+    
+    # Marquer la position du foyer
+    if decile_atteint:
+        foyer_decile_idx = list(INSEE_DECILES_2021.keys()).index(decile_atteint)
+        foyer_position = positions[foyer_decile_idx]
+    else:
+        foyer_position = positions[0]  # Premier décile
+    
+    ax.text(foyer_position, bar_y + bar_height + 0.12, f'{niveau_de_vie_foyer:,.0f} €', 
+           fontsize=12, fontweight='bold', ha='center', va='center', 
+           color=color_foyer, bbox=dict(boxstyle="round,pad=0.3", facecolor='white', edgecolor=color_foyer))
+    ax.text(foyer_position, bar_y + bar_height + 0.35, 'Votre Foyer', 
+           fontsize=11, fontweight='bold', ha='center', va='center', color=color_foyer)
+    
+    # Échelle en bas
+    scale_positions = [0, 10000, 20000, 30000, 40000, 50000, 60000, 70000]
+    for pos in scale_positions:
+        ax.plot([pos, pos], [bar_y - 0.3, bar_y - 0.32], color='#CCCCCC', linewidth=1)
+        ax.text(pos, bar_y - 0.35, f'{pos//1000}k', fontsize=8, 
+               ha='center', va='center', color='#888888')
+    
+    # Label de l'axe
+    ax.text(37500, bar_y - 0.50, 'Niveau de vie annuel par Unité de Consommation (€)', 
+           fontsize=10, ha='center', va='center', color='#666666', style='italic')
+    
+    # Sauvegarde
+    flux_dir = os.path.join(output_dir, "flux")
+    Path(flux_dir).mkdir(exist_ok=True)
+    output_path = os.path.join(flux_dir, "positionnement_foyer_deciles.png")
+    plt.savefig(output_path, dpi=200, bbox_inches='tight', 
+                facecolor='white', edgecolor='none', pad_inches=0.3)
+    plt.close(fig)
+    print(f"✅ Graphique positionnement foyer généré : {output_path}")
+    
+    # Debug : afficher les valeurs calculées
+    print(f"   📊 Debug: UC={uc:.2f}, Revenu dispo={revenu_disponible_annuel:,.0f}€, Niveau vie={niveau_de_vie_foyer:,.0f}€/an, Décile={decile_atteint or 'D1'}")
+
+
 def create_fiscalite_summary_image(resultats_fiscaux, output_dir):
     """Crée une image de synthèse des KPIs fiscalité similaire au GUI."""
     import matplotlib.pyplot as plt
@@ -1151,6 +1352,9 @@ def export_flux_kpis(data, output_dir):
         
         # Génération de l'image des tableaux revenus/charges ANNUELS
         create_flux_summary_annuel_image(data, output_dir)
+        
+        # Génération du graphique de positionnement du foyer par rapport aux déciles INSEE
+        create_positionnement_foyer_image(data, output_dir)
         
         # Calcul des KPIs flux
         revenus = data.get('revenus', [])

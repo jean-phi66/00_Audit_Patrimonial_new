@@ -1,0 +1,16 @@
+{
+  "impot_revenu_net": 26727.0,
+  "prelevements_sociaux": 860.69,
+  "tmi": 30,
+  "taux_imposition_global": 17.0,
+  "nombre_parts_fiscales": 3.0,
+  "impot_sans_quotient_familial": 30308.56,
+  "gain_quotient_familial": -3582.0,
+  "revenu_brut_global": 162324.0,
+  "revenu_net_imposable": 146091.6,
+  "revenus_salaires_detectes": {
+    "Inconnu": 157320.0
+  },
+  "revenu_foncier_net": 5004.0,
+  "annee_calcul": 2025
+}
