@@ -42,7 +42,14 @@ def analyser_fiscalite_foyer(annee, parents, enfants, revenus_annuels, revenu_fo
     for i, parent in enumerate(parents):
         prenom = parent.get('prenom', f'parent_{i+1}')
         dob = parent.get('date_naissance')
-        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(1980, 1, 1).strftime('%Y-%m-%d')
+        # Gérer le format date de Streamlit: {'_type': 'date', 'value': '1976-08-12'}
+        if isinstance(dob, dict) and '_type' in dob and dob['_type'] == 'date':
+            date_naissance_formatee = dob['value']
+        elif hasattr(dob, 'strftime'):
+            date_naissance_formatee = dob.strftime('%Y-%m-%d')
+        else:
+            date_naissance_formatee = date(1980, 1, 1).strftime('%Y-%m-%d')
+        
         revenu_parent = revenus_annuels.get(prenom, 0)
         
         individus[prenom] = {
@@ -55,7 +62,13 @@ def analyser_fiscalite_foyer(annee, parents, enfants, revenus_annuels, revenu_fo
     for i, enfant in enumerate(enfants):
         prenom = enfant.get('prenom', f'enfant_{i+1}')
         dob = enfant.get('date_naissance')
-        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(2010, 1, 1).strftime('%Y-%m-%d')
+        # Gérer le format date de Streamlit: {'_type': 'date', 'value': '2015-03-25'}
+        if isinstance(dob, dict) and '_type' in dob and dob['_type'] == 'date':
+            date_naissance_formatee = dob['value']
+        elif hasattr(dob, 'strftime'):
+            date_naissance_formatee = dob.strftime('%Y-%m-%d')
+        else:
+            date_naissance_formatee = date(2010, 1, 1).strftime('%Y-%m-%d')
         
         individus[prenom] = {
             'date_naissance': {'ETERNITY': date_naissance_formatee}
@@ -164,14 +177,26 @@ def simuler_evolution_fiscalite(annee, parents, enfants, revenu_foncier_net=0, e
     for i, parent in enumerate(parents):
         prenom = parent.get('prenom', f'parent_{i+1}')
         dob = parent.get('date_naissance')
-        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(1980, 1, 1).strftime('%Y-%m-%d')
+        # Gérer le format date de Streamlit: {'_type': 'date', 'value': '1976-08-12'}
+        if isinstance(dob, dict) and '_type' in dob and dob['_type'] == 'date':
+            date_naissance_formatee = dob['value']
+        elif hasattr(dob, 'strftime'):
+            date_naissance_formatee = dob.strftime('%Y-%m-%d')
+        else:
+            date_naissance_formatee = date(1980, 1, 1).strftime('%Y-%m-%d')
         individus[prenom] = {'date_naissance': {'ETERNITY': date_naissance_formatee}}
         declarants.append(prenom)
 
     for i, enfant in enumerate(enfants):
         prenom = enfant.get('prenom', f'enfant_{i+1}')
         dob = enfant.get('date_naissance')
-        date_naissance_formatee = dob.strftime('%Y-%m-%d') if dob else date(2010, 1, 1).strftime('%Y-%m-%d')
+        # Gérer le format date de Streamlit: {'_type': 'date', 'value': '2015-03-25'}
+        if isinstance(dob, dict) and '_type' in dob and dob['_type'] == 'date':
+            date_naissance_formatee = dob['value']
+        elif hasattr(dob, 'strftime'):
+            date_naissance_formatee = dob.strftime('%Y-%m-%d')
+        else:
+            date_naissance_formatee = date(2010, 1, 1).strftime('%Y-%m-%d')
         individus[prenom] = {'date_naissance': {'ETERNITY': date_naissance_formatee}}
         all_children_names.append(prenom)
 
@@ -218,7 +243,7 @@ def simuler_evolution_fiscalite(annee, parents, enfants, revenu_foncier_net=0, e
     ir_tranche_evol = simulation.calculate('ir_tranche', annee_str).reshape(axis_count, n_reshape_loc)[:, 0]
 
     df_evolution = pd.DataFrame({
-        'Revenu': salaire_foyer,
+        'Revenu': salaire_foyer + revenu_foncier_net,  # Ajouter les revenus fonciers au total
         'IR': ir_net_evol,
         'ir_tranche': ir_tranche_evol
     })
