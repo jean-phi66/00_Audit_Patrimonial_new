@@ -11,61 +11,24 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from core.patrimoine_logic import calculate_monthly_payment
+from core.endettement_charts import (
+    calculate_weighted_income,
+    calculate_current_debt_service, 
+    calculate_endettement_metrics,
+    create_debt_gauge_chart,
+    create_debt_breakdown_chart,
+    generate_endettement_charts,
+    RENTAL_INCOME_WEIGHT
+)
 
 # --- Constantes de calcul ---
-RENTAL_INCOME_WEIGHT = 0.70 # Pondération des revenus locatifs par les banques
+# RENTAL_INCOME_WEIGHT maintenant importée du module centralisé
 
 # --- Fonctions de calcul ---
 
-def calculate_weighted_income(revenus):
-    """
-    Calcule les revenus mensuels pondérés pour le calcul de la capacité d'endettement.
-    - Salaires: 100%
-    - Revenus locatifs (Patrimoine): 70%
-    - Autres revenus: 0% (non pris en compte)
-    """
-    total_weighted_income = 0
-    salaire_total = 0
-    loyers_bruts = 0
-    loyers_ponderes = 0
+# calculate_weighted_income maintenant importée du module centralisé
 
-    for revenu in revenus:
-        montant = revenu.get('montant', 0.0)
-        if revenu.get('type') == 'Salaire':
-            total_weighted_income += montant
-            salaire_total += montant
-        elif revenu.get('type') == 'Patrimoine':
-            loyers_bruts += montant
-            weighted_amount = montant * RENTAL_INCOME_WEIGHT
-            total_weighted_income += weighted_amount
-            loyers_ponderes += weighted_amount
-    
-    return {
-        "total": total_weighted_income,
-        "salaires": salaire_total,
-        "loyers_bruts": loyers_bruts,
-        "loyers_ponderes": loyers_ponderes
-    }
-
-def calculate_current_debt_service(passifs):
-    """
-    Calcule le total des mensualités de prêts en cours et fournit le détail.
-    """
-    total_debt_service = 0
-    debt_details = []
-    for passif in passifs:
-        mensualite = calculate_monthly_payment(
-            passif.get('montant_initial', 0),
-            passif.get('taux_annuel', 0),
-            passif.get('duree_mois', 0)
-        )
-        if mensualite > 0:
-            debt_details.append({
-                'libelle': passif.get('libelle', 'Prêt non identifié'),
-                'mensualite': mensualite
-            })
-            total_debt_service += mensualite
-    return {"total": total_debt_service, "details": debt_details}
+# calculate_current_debt_service maintenant importée du module centralisé
 
 def calculate_loan_principal(monthly_payment, annual_rate_pct, duration_months):
     """
@@ -111,32 +74,22 @@ def display_results(weighted_income, current_debt, max_debt_ratio_pct):
     )
     col4.metric("Capacité d'Emprunt Restante", f"{remaining_capacity:,.0f} €/mois")
 
-    # Jauge de visualisation
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number+delta",
-        value = current_debt_ratio_pct,
-        number = {'suffix': ' %'},
-        title = {'text': f"Taux d'endettement (Cible: {max_debt_ratio_pct}%)"},
-        delta = {'reference': max_debt_ratio_pct, 'increasing': {'color': "red"}, 'decreasing': {'color': "green"}},
-        gauge = {
-            'axis': {'range': [None, 50], 'tickwidth': 1, 'tickcolor': "darkblue"},
-            'bar': {'color': "darkblue"},
-            'bgcolor': "white",
-            'borderwidth': 2,
-            'bordercolor': "gray",
-            'steps' : [
-                {'range': [0, max_debt_ratio_pct], 'color': 'lightgreen'},
-                {'range': [max_debt_ratio_pct, 50], 'color': 'lightcoral'}
-            ],
-            'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': max_debt_ratio_pct}
-        }))
+    # Jauge de visualisation (utilise la fonction centralisée)
+    metrics_data = calculate_endettement_metrics([], [], max_debt_ratio_pct)
+    metrics_data.update({
+        'weighted_income': weighted_income,
+        'current_debt': current_debt,
+        'current_debt_ratio_pct': current_debt_ratio_pct,
+        'max_debt_ratio_pct': max_debt_ratio_pct
+    })
+    fig = create_debt_gauge_chart(metrics_data)
     fig.update_layout(height=300, margin=dict(t=50, b=50, l=50, r=50))
     st.plotly_chart(fig, use_container_width=True)
 
     return remaining_capacity
 
 def display_debt_ratio_breakdown_chart(debt_details, weighted_income, max_debt_ratio_pct):
-    """Affiche un graphique de la répartition du taux d'endettement par prêt."""
+    """Affiche un graphique de la répartition du taux d'endettement par prêt (utilise les fonctions centralisées)."""
     st.subheader("Répartition du Taux d'Endettement par Prêt")
     
     if not debt_details:
@@ -147,76 +100,14 @@ def display_debt_ratio_breakdown_chart(debt_details, weighted_income, max_debt_r
         st.warning("Revenus pondérés nuls, impossible de calculer la répartition.")
         return
 
-    # Préparer les données pour le graphique
-    chart_data = []
-    total_current_debt_pct = 0
-    for loan in debt_details:
-        percentage = (loan['mensualite'] / weighted_income) * 100
-        chart_data.append({
-            'y_axis': "Taux d'endettement",
-            'percentage': percentage,
-            'pret': loan['libelle'],
-            'mensualite': loan['mensualite'] # Ajout de la mensualité pour l'affichage
-        })
-        total_current_debt_pct += percentage
-    
-    # Ajouter la capacité restante pour atteindre la limite
-    remaining_capacity_pct = max_debt_ratio_pct - total_current_debt_pct
-    if remaining_capacity_pct > 0:
-        total_current_debt_amount = sum(l['mensualite'] for l in debt_details)
-        remaining_capacity_amount = (weighted_income * (max_debt_ratio_pct / 100)) - total_current_debt_amount
-        chart_data.append({
-            'y_axis': "Taux d'endettement",
-            'percentage': remaining_capacity_pct,
-            'pret': 'Capacité restante',
-            'mensualite': remaining_capacity_amount # Ajout du montant restant
-        })
-    
-    df_chart = pd.DataFrame(chart_data)
-    
-    # Créer le graphique
-    fig = px.bar(
-        df_chart,
-        x='percentage',
-        y='y_axis',
-        color='pret',
-        orientation='h',
-        title="Composition du Taux d'Endettement Actuel",
-        labels={'percentage': "Taux d'endettement (%)", 'pret': 'Prêt'},
-        text='percentage', # Le texte sera défini par le template ci-dessous
-        custom_data=['mensualite'], # Fournir les données de mensualité au graphique
-        color_discrete_map={
-            "Capacité restante": "rgba(44, 160, 44, 0.5)" # Vert clair transparent
-        }
-    )
-
-    fig.update_traces(
-        # Afficher le % et le montant en € (sans décimales)
-        texttemplate='%{x:.2f}%<br><b>%{customdata[0]:.0f} €</b>', 
-        textposition='inside',
-        insidetextanchor='middle',
-        textfont_size=14 # Augmentation de la taille de la police
-    )
-    
-    # Ajouter une ligne verticale pour la limite
-    fig.add_vline(
-        x=max_debt_ratio_pct, 
-        line_width=2, 
-        line_dash="dash", 
-        line_color="red",
-        annotation_text=f"Limite {max_debt_ratio_pct}%",
-        annotation_position="bottom right"
-    )
-
-    fig.update_layout(
-        barmode='stack',
-        xaxis_title="Taux d'endettement (%)",
-        yaxis_title="",
-        yaxis=dict(showticklabels=False),
-        height=300,
-        margin=dict(l=10, r=10, t=50, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5)
-    )
+    # Utiliser la fonction centralisée
+    metrics_data = {
+        'debt_details': debt_details,
+        'weighted_income': weighted_income,
+        'max_debt_ratio_pct': max_debt_ratio_pct
+    }
+    fig = create_debt_breakdown_chart(metrics_data)
+    fig.update_layout(height=300)  # Ajuster la hauteur pour l'interface GUI
     st.plotly_chart(fig, use_container_width=True)
 
 def display_loan_simulator(remaining_capacity):

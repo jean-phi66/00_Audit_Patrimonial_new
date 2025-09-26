@@ -14,34 +14,37 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ Paramètres")
     
+    # Récupération des paramètres SCPI sauvegardés
+    scpi_params = st.session_state.get('scpi_credit_parameters', {})
+    
     # Section Hypothèses de l'investissement
     st.markdown("### 🏢 **Hypothèses de l'investissement**")
     
     with st.container():
         st.markdown('<div style="background-color: #e8f4fd; padding: 10px; border-radius: 5px;">', unsafe_allow_html=True)
-        montant = st.number_input("**Montant**", value=50000, step=1000, format="%d")
+        montant = st.number_input("**Montant**", value=scpi_params.get('montant', 50000), step=1000, format="%d")
         st.markdown("</div>", unsafe_allow_html=True)
     
     div_col1, div_col2 = st.columns(2)
     with div_col1:
-        dividende_net = st.number_input("Dividende net distribué", value=5.70, step=0.1, format="%.2f")
+        dividende_net = st.number_input("Dividende net distribué", value=scpi_params.get('dividende_net', 5.70), step=0.1, format="%.2f")
     with div_col2:
         st.write("**Montant annuel**")
         st.write(f"💰 {dividende_net/100 * montant:,.2f} €")
     
     # Délai de jouissance (déplacé sous le dividende)
-    delai_jouissance = st.number_input("Délai de jouissance (en mois)", value=3, step=1, format="%d", min_value=0, max_value=12)
+    delai_jouissance = st.number_input("Délai de jouissance (en mois)", value=scpi_params.get('delai_jouissance', 4), step=1, format="%d", min_value=0, max_value=12)
     
     # Organisation sur deux colonnes
     invest_col1, invest_col2 = st.columns(2)
     
     with invest_col1:
-        evolution_part = st.number_input("Evolution valeur de la part", value=1.00, step=0.1, format="%.2f")
-        apport = st.number_input("**Apport**", value=500, step=100, format="%d")
+        evolution_part = st.number_input("Evolution valeur de la part", value=scpi_params.get('evolution_part', 1.00), step=0.1, format="%.2f")
+        apport = st.number_input("**Apport**", value=scpi_params.get('apport', 0), step=100, format="%d")
         
     with invest_col2:
-        frais_entree = st.number_input("Frais d'entrée (%)", value=1.00, step=0.1, format="%.2f")
-        charges = st.number_input("Charges annuelles", value=0, step=50, format="%d")
+        frais_entree = st.number_input("Frais d'entrée (%)", value=scpi_params.get('frais_entree', 10.00), step=0.1, format="%.2f")
+        charges = st.number_input("Charges annuelles", value=scpi_params.get('charges', 0), step=50, format="%d")
     
     # Affichage des montants calculés
     st.write(f"**Frais d'entrée:** {frais_entree/100 * montant:,.0f} €")
@@ -55,15 +58,17 @@ with st.sidebar:
     finance_col1, finance_col2 = st.columns(2)
     
     with finance_col1:
-        taux_interet = st.number_input("Taux d'intérêt annuel", value=5.00, step=0.1, format="%.2f")
-        duree_emprunt = st.number_input("Durée de l'emprunt", value=25, step=1, format="%d")
-        nb_mois_differe = st.number_input("Nombre de mois de différé", value=3, step=1, format="%d", min_value=0, max_value=24)
+        taux_interet = st.number_input("Taux d'intérêt annuel", value=scpi_params.get('taux_interet', 5.00), step=0.1, format="%.2f")
+        duree_emprunt = st.number_input("Durée de l'emprunt", value=scpi_params.get('duree_emprunt', 20), step=1, format="%d")
+        nb_mois_differe = st.number_input("Nombre de mois de différé", value=scpi_params.get('nb_mois_differe', 3), step=1, format="%d", min_value=0, max_value=24)
         
     with finance_col2:
-        taux_assurance = st.number_input("Taux d'assurance", value=0.20, step=0.01, format="%.2f")
+        taux_assurance = st.number_input("Taux d'assurance", value=scpi_params.get('taux_assurance', 0.20), step=0.01, format="%.2f")
+        type_differe_options = ["Différé partiel", "Différé total"]
+        type_differe_index = type_differe_options.index(scpi_params.get('type_differe', "Différé partiel"))
         type_differe = st.selectbox("Type de différé", 
-                                   options=["Différé partiel", "Différé total"],
-                                   index=0)
+                                   options=type_differe_options,
+                                   index=type_differe_index)
     
     # Calcul des mensualités
     taux_mensuel = taux_interet / 100 / 12
@@ -97,17 +102,36 @@ with st.sidebar:
     fiscal_col1, fiscal_col2 = st.columns(2)
     
     with fiscal_col1:
-        tmi = st.number_input("TMI (%)", value=30.0, step=0.1, format="%.1f")
+        tmi = st.number_input("TMI (%)", value=scpi_params.get('tmi', 30), step=1, format="%d", min_value=0)
         
     with fiscal_col2:
-        charges_sociales = st.number_input("Charges sociales (%)", value=17.20, step=0.1, format="%.2f")
+        charges_sociales = st.number_input("Charges sociales (%)", value=scpi_params.get('charges_sociales', 17.20), step=0.1, format="%.2f")
     
     total_fiscal = tmi + charges_sociales
     st.write(f"**Total fiscal:** {total_fiscal:.1f}%")
     
     # Paramètres de revente
     st.markdown("### 📅 **Paramètres de revente**")
-    si_revente_ans = st.number_input("Revente prévue à l'année", value=15, step=1, format="%d", min_value=1, max_value=25)
+    si_revente_ans = st.number_input("Revente prévue à l'année", value=scpi_params.get('si_revente_ans', 15), step=1, format="%d", min_value=1, max_value=25)
+
+# Sauvegarde des paramètres SCPI dans le session_state
+st.session_state.scpi_credit_parameters = {
+    'montant': montant,
+    'dividende_net': dividende_net,
+    'delai_jouissance': delai_jouissance,
+    'evolution_part': evolution_part,
+    'apport': apport,
+    'frais_entree': frais_entree,
+    'charges': charges,
+    'taux_interet': taux_interet,
+    'duree_emprunt': duree_emprunt,
+    'nb_mois_differe': nb_mois_differe,
+    'taux_assurance': taux_assurance,
+    'type_differe': type_differe,
+    'tmi': tmi,
+    'charges_sociales': charges_sociales,
+    'si_revente_ans': si_revente_ans
+}
 
 # Contenu principal - Tableau d'amortissement
 

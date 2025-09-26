@@ -205,17 +205,51 @@ if is_single_parent_auto:
     est_parent_isole = st.sidebar.checkbox("Cocher la case T (Parent isolé)", value=is_single_parent_auto, key="per_isole")
 else:
     est_parent_isole = False
-input_plafond_PER = st.sidebar.number_input("Votre Plafond PER disponible (€)", value=10000, step=100, min_value=0)
-input_ir_residuel_min = st.sidebar.number_input("IR résiduel minimum souhaité (€)", value=0, step=100, min_value=0, help="L'optimisation ne cherchera pas à faire baisser l'impôt en dessous de ce montant.")
+
+# Récupération des paramètres sauvegardés s'ils existent
+per_params = st.session_state.get('per_input_parameters', {})
+
+input_plafond_PER = st.sidebar.number_input(
+    "Votre Plafond PER disponible (€)", 
+    value=per_params.get('plafond_per', 10000), 
+    step=100, 
+    min_value=0
+)
+input_ir_residuel_min = st.sidebar.number_input(
+    "IR résiduel minimum souhaité (€)", 
+    value=per_params.get('ir_residuel_min', 0), 
+    step=100, 
+    min_value=0, 
+    help="L'optimisation ne cherchera pas à faire baisser l'impôt en dessous de ce montant."
+)
 
 run_simulation = st.sidebar.button("🚀 Lancer la simulation PER", use_container_width=True, type="primary")
 
 with st.sidebar.expander("Options", expanded=False):
-    annee_simulation = st.number_input("Année d'imposition", min_value=2020, max_value=date.today().year, value=date.today().year, key="per_annee")
+    annee_simulation = st.number_input(
+        "Année d'imposition", 
+        min_value=2020, 
+        max_value=date.today().year, 
+        value=per_params.get('annee_simulation', date.today().year), 
+        key="per_annee"
+    )
     # On calcule les revenus ici pour les valeurs par défaut des inputs
     revenus_salaires, revenu_foncier_net = get_revenus_imposables(annee_simulation)
     total_salary = sum(revenus_salaires.values())
-    input_revenu_max_simu = st.number_input("Revenu max. pour les graphiques (€)", value=max(150000, int(total_salary * 1.2)), step=1000, min_value=int(total_salary if total_salary > 0 else 1))
+    input_revenu_max_simu = st.number_input(
+        "Revenu max. pour les graphiques (€)", 
+        value=per_params.get('revenu_max_simu', max(150000, int(total_salary * 1.2))), 
+        step=1000, 
+        min_value=int(total_salary if total_salary > 0 else 1)
+    )
+
+# Sauvegarde des paramètres d'entrée dans le session_state
+st.session_state.per_input_parameters = {
+    'plafond_per': input_plafond_PER,
+    'ir_residuel_min': input_ir_residuel_min,
+    'annee_simulation': annee_simulation,
+    'revenu_max_simu': input_revenu_max_simu
+}
 
 if run_simulation:
     with st.spinner("Calculs d'optimisation en cours avec OpenFisca..."):

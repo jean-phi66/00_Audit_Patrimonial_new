@@ -2,14 +2,44 @@ import streamlit as st
 import uuid
 import plotly.graph_objects as go
 from datetime import date
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.table import Table
+import numpy as np
 from core.patrimoine_logic import (
     calculate_monthly_payment, calculate_crd, get_patrimoine_df, add_item, remove_item
 )
 from core.charts import (
     create_patrimoine_brut_treemap, create_patrimoine_net_treemap,
     create_patrimoine_net_donut, create_patrimoine_ideal_donut,
-    create_patrimoine_brut_stacked_bar, create_patrimoine_net_stacked_bar
+    create_patrimoine_brut_stacked_bar, create_patrimoine_net_stacked_bar,
+    ASSET_TYPE_COLOR_MAP
 )
+
+# Fonction pour convertir les couleurs plotly en format matplotlib
+def plotly_to_matplotlib_color(plotly_color):
+    """Convertit une couleur plotly en format matplotlib hex."""
+    if plotly_color.startswith('#'):
+        return plotly_color
+    # Si c'est un nom de couleur CSS, essayer de le convertir
+    color_map = {
+        'rgb(230, 25, 75)': '#e6194b',      # Vivid[0] - Rouge
+        'rgb(60, 180, 75)': '#3cb44b',       # Vivid[1] - Vert  
+        'rgb(255, 225, 25)': '#ffe119',      # Vivid[2] - Jaune
+        'rgb(245, 130, 48)': '#f58230',      # Vivid[4] - Orange
+    }
+    return color_map.get(plotly_color, '#3b82f6')  # Défaut bleu
+
+# Couleurs matplotlib basées sur la palette treemap (Vivid)
+TYPE_COLORS_MPL = {
+    'Immobilier de jouissance': '#e58606',    # Orange Vivid[0]
+    'Immobilier productif': '#5d69b1',       # Violet/Bleu Vivid[1]
+    'Actifs financiers': '#52bca3',          # Turquoise Vivid[2]
+    'Autres actifs': '#cc61b0',              # Rose/Violet Vivid[4]
+    'Placements financiers': '#52bca3',      # Turquoise (même que actifs financiers)
+}
+
 from core.flux_logic import calculate_consumption_units, calculate_age
 
 # --- Constantes INSEE pour le patrimoine ---
@@ -383,6 +413,197 @@ def display_summary_and_charts():
     # Ajout de la section de comparaison patrimoniale
     if not df_patrimoine.empty:
         display_patrimoine_comparison_ui()
+
+def create_patrimoine_summary_table_image(actifs, passifs):
+    """
+    Crée une image du tableau récapitulatif du patrimoine avec un style moderne.
+    
+    Args:
+        actifs (list): Liste des actifs
+        passifs (list): Liste des passifs
+        
+    Returns:
+        matplotlib.figure.Figure: Figure contenant le tableau
+    """
+    # Calculer les totaux
+    total_actifs = sum(a.get('valeur', 0.0) for a in actifs)
+    total_passifs = sum(p.get('crd_calcule', calculate_crd(
+        p.get('montant_initial', 0), 
+        p.get('taux_annuel', 0), 
+        p.get('duree_mois', 0), 
+        p.get('date_debut', date.today())
+    )) for p in passifs)
+    patrimoine_net = total_actifs - total_passifs
+    
+    # Créer le DataFrame
+    df_patrimoine = get_patrimoine_df(actifs, passifs)
+    
+    if df_patrimoine.empty:
+        # Créer une figure vide avec un message
+        fig, ax = plt.subplots(figsize=(14, 8))
+        ax.text(0.5, 0.5, 'Aucune donnée patrimoniale disponible', 
+                ha='center', va='center', fontsize=18, 
+                color='#666666', family='sans-serif',
+                transform=ax.transAxes)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+        fig.patch.set_facecolor('white')
+        return fig
+    
+    # Préparer les données pour le tableau
+    df_display = df_patrimoine.copy()
+    cols_to_display = ['Libellé', 'Type', 'Valeur Brute', 'Passif', 'Valeur Nette']
+    existing_cols = [col for col in cols_to_display if col in df_display.columns]
+    df_table = df_display[existing_cols].copy()
+    
+    # Formatter les colonnes monétaires
+    money_cols = ['Valeur Brute', 'Passif', 'Valeur Nette']
+    for col in money_cols:
+        if col in df_table.columns:
+            df_table[col] = df_table[col].apply(lambda x: f"{x:,.0f} €")
+    
+    # Ne pas ajouter de ligne de total - les métriques en haut suffisent
+    
+    # Créer la figure avec un style moderne
+    plt.style.use('default')  # Reset style
+    fig = plt.figure(figsize=(18, max(10, len(df_table) * 0.8 + 3)))  # Réduire la hauteur
+    fig.patch.set_facecolor('#f8f9fa')
+    
+    # Créer des zones pour le layout (sans zone métriques)
+    gs = fig.add_gridspec(3, 1, height_ratios=[0.6, 3.5, 0.1], hspace=0.08)  # 3 zones au lieu de 4
+    
+    # 1. Zone titre principal
+    ax_title = fig.add_subplot(gs[0])
+    ax_title.text(0.5, 0.5, 'TABLEAU RÉCAPITULATIF DU PATRIMOINE', 
+                  ha='center', va='center', fontsize=24, fontweight='bold',
+                  color='#1f2937', family='sans-serif',
+                  transform=ax_title.transAxes)
+    ax_title.axis('off')
+    
+    # 2. Zone tableau principal (devient gs[1] au lieu de gs[2])
+    ax_table = fig.add_subplot(gs[1])
+    ax_table.axis('tight')
+    ax_table.axis('off')
+    
+    # Préparer les données du tableau
+    table_data = []
+    headers = list(df_table.columns)
+    table_data.append(headers)
+    
+    for _, row in df_table.iterrows():
+        table_data.append([str(row[col]) for col in headers])
+    
+    # Créer le tableau avec un style moderne
+    table = ax_table.table(cellText=table_data[1:], 
+                          colLabels=table_data[0],
+                          cellLoc='left',  # Alignement à gauche pour le texte
+                          loc='center',
+                          bbox=[0.02, 0.02, 0.96, 0.96])  # Plus d'espace pour le tableau
+    
+    # Styliser le tableau de manière moderne
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)  # Police augmentée de 2pt
+    table.scale(1, 2.2)  # Espace vertical réduit
+    
+    # Ajuster la largeur des colonnes
+    cellDict = table.get_celld()
+    num_cols = len(headers)
+    
+    # Définir les largeurs relatives des colonnes
+    col_widths = {
+        'Libellé': 0.35,      # Plus large pour les noms longs
+        'Type': 0.25,         # Largeur moyenne
+        'Valeur Brute': 0.15, # Largeur pour les montants
+        'Passif': 0.12,       # Largeur pour les montants
+        'Valeur Nette': 0.13  # Largeur pour les montants
+    }
+    
+    # Appliquer les largeurs et alignements
+    for (i, j), cell in cellDict.items():
+        col_name = headers[j] if j < len(headers) else ""
+        
+        # Définir la largeur de la cellule
+        if col_name in col_widths:
+            cell.set_width(col_widths[col_name])
+        
+        # Alignement spécifique par colonne
+        if col_name in ['Valeur Brute', 'Passif', 'Valeur Nette']:
+            cell.set_text_props(ha='right')  # Montants alignés à droite
+        elif col_name == 'Type':
+            cell.set_text_props(ha='center')  # Type centré
+        else:
+            cell.set_text_props(ha='left')   # Libellé aligné à gauche
+            
+        # Ajuster le padding et le wrapping
+        cell.get_text().set_wrap(True)
+        cell.set_text_props(verticalalignment='center')
+    
+    # Style de l'en-tête moderne
+    header_colors = ['#1f2937', '#374151', '#4b5563', '#6b7280', '#9ca3af']
+    for i, header in enumerate(headers):
+        table[(0, i)].set_facecolor('#1f2937')
+        table[(0, i)].set_text_props(weight='bold', color='white', size=13, ha='center')
+        table[(0, i)].set_height(0.07)  # Hauteur réduite
+    
+    # Style des lignes de données avec couleurs treemap
+    for i in range(1, len(table_data)):
+        # Récupérer le type d'actif pour cette ligne
+        asset_type = None
+        bg_color = '#ffffff'  # Couleur par défaut
+        
+        if i-1 < len(df_table):
+            row_data = df_table.iloc[i-1]
+            if 'Type' in row_data:
+                asset_type = row_data['Type']
+                # Utiliser les couleurs de la palette treemap avec plus d'intensité
+                if asset_type in TYPE_COLORS_MPL:
+                    # Créer une version plus foncée et visible de la couleur pour le fond
+                    if asset_type == 'Immobilier de jouissance':
+                        bg_color = '#ffd49a'  # Orange plus foncé
+                    elif asset_type == 'Immobilier productif': 
+                        bg_color = '#c7d2fe'  # Violet/Bleu plus foncé
+                    elif asset_type in ['Actifs financiers', 'Placements financiers']:
+                        bg_color = '#99f6e4'  # Turquoise plus foncé
+                    elif asset_type == 'Autres actifs':
+                        bg_color = '#f0abfc'  # Rose/Violet plus foncé
+        
+        for j in range(len(headers)):
+            cell = table[(i, j)]
+            
+            # Lignes normales avec couleurs thématiques
+            if i % 2 == 0:
+                cell.set_facecolor(bg_color)
+            else:
+                # Version légèrement plus claire pour l'alternance
+                if bg_color == '#ffd49a':  # Orange
+                    cell.set_facecolor('#ffe4c1')
+                elif bg_color == '#c7d2fe':  # Violet/Bleu
+                    cell.set_facecolor('#ddd6fe')
+                elif bg_color == '#99f6e4':  # Turquoise
+                    cell.set_facecolor('#b3f9ec')
+                elif bg_color == '#f0abfc':  # Rose/Violet
+                    cell.set_facecolor('#f5c2fc')
+                else:
+                    cell.set_facecolor('#f9fafb')
+                    
+            cell.set_text_props(color='#374151', size=12)
+            cell.set_height(0.05)  # Hauteur réduite des lignes de données
+            cell.set_edgecolor('#e5e7eb')
+            cell.set_linewidth(0.5)
+    
+    # 3. Zone footer avec informations
+    ax_footer = fig.add_subplot(gs[2])  # gs[2] au lieu de gs[3]
+    ax_footer.text(0.5, 0.5, f"Généré le {date.today().strftime('%d/%m/%Y')} • Audit Patrimonial", 
+                   ha='center', va='center', fontsize=10, 
+                   color='#9ca3af', style='italic',
+                   transform=ax_footer.transAxes)
+    ax_footer.axis('off')
+    
+    # Ajustements finaux pour éviter les warnings
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.08)
+    
+    return fig
 
 def initialize_session_state():
     """Initialise les listes d'actifs et de passifs dans le session state si elles n'existent pas."""

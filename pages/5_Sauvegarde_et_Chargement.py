@@ -10,6 +10,12 @@ class CustomJSONEncoder(json.JSONEncoder):
         if isinstance(obj, date):
             # Stocke la date dans un format reconnaissable
             return {'_type': 'date', 'value': obj.isoformat()}
+        
+        # Gestion des objets OpenFisca non sérialisables
+        if hasattr(obj, '__class__') and 'MarginalRateTaxScale' in str(type(obj)):
+            # Convertit l'objet MarginalRateTaxScale en représentation simple
+            return {'_type': 'MarginalRateTaxScale', 'value': 'non_serializable_openfisca_object'}
+        
         # Gestion des types NumPy
         import numpy as np
         if isinstance(obj, np.integer):
@@ -18,6 +24,7 @@ class CustomJSONEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        
         # Gestion des types Pandas
         try:
             import pandas as pd
@@ -27,18 +34,30 @@ class CustomJSONEncoder(json.JSONEncoder):
                 return obj.to_dict()
         except ImportError:
             pass
-        return super().default(obj)
+        
+        # Pour tous les autres objets non sérialisables, on les ignore
+        try:
+            return super().default(obj)
+        except TypeError:
+            # Si l'objet n'est pas sérialisable, on le remplace par une représentation string
+            return f"non_serializable_{type(obj).__name__}"
 
 def json_decoder_hook(obj):
     """Décodeur JSON personnalisé pour reconstruire les objets date."""
-    if '_type' in obj and obj['_type'] == 'date':
-        return datetime.fromisoformat(obj['value']).date()
+    if '_type' in obj:
+        if obj['_type'] == 'date':
+            return datetime.fromisoformat(obj['value']).date()
+        elif obj['_type'] == 'MarginalRateTaxScale':
+            # Pour les objets OpenFisca non sérialisables, on retourne None ou une valeur par défaut
+            return None
     return obj
 
 # --- Clés du session_state à sauvegarder ---
 PERSISTENT_KEYS = [
     'parents', 'enfants', 'actifs', 'passifs', 
-    'projection_settings', 'revenus', 'depenses'
+    'projection_settings', 'revenus', 'depenses',
+    'reorganisation_data', 'epargne_precaution', 'reserve_projet',
+    'per_input_parameters', 'scpi_credit_parameters'
 ]
 
 # --- Fonctions principales de la page ---
@@ -69,15 +88,26 @@ def get_data_to_save():
     """Rassemble toutes les données pertinentes du session_state dans un dictionnaire."""
     data_to_save = {}
     for key in PERSISTENT_KEYS:
-        # Utilise une valeur par défaut appropriée (liste ou dictionnaire)
-        default_value = {} if 'settings' in key else []
+        # Utilise une valeur par défaut appropriée selon le type de données
+        if 'settings' in key or key in ['per_input_parameters', 'scpi_credit_parameters']:
+            default_value = {}
+        elif key in ['epargne_precaution', 'reserve_projet']:
+            default_value = 0.0
+        else:
+            default_value = []
         data_to_save[key] = st.session_state.get(key, default_value)
     return data_to_save
 
 def load_data_into_session(data):
     """Charge les données depuis un dictionnaire dans le session_state."""
     for key in PERSISTENT_KEYS:
-        default_value = {} if 'settings' in key else []
+        # Utilise une valeur par défaut appropriée selon le type de données
+        if 'settings' in key or key in ['per_input_parameters', 'scpi_credit_parameters']:
+            default_value = {}
+        elif key in ['epargne_precaution', 'reserve_projet']:
+            default_value = 0.0
+        else:
+            default_value = []
         setattr(st.session_state, key, data.get(key, default_value))
 
 #def main():

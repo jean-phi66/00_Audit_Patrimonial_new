@@ -14,6 +14,20 @@ ASSET_TYPE_COLOR_MAP = {
     'Placements financiers': px.colors.qualitative.Vivid[2], # Pour le graphique "cible"
 }
 
+# Palette de couleurs pour les flux (utilise les mêmes couleurs de base que le patrimoine)
+FLUX_CATEGORY_COLOR_MAP = {
+    'Dépenses courantes': px.colors.qualitative.Vivid[9],      # Orange (même que Immobilier de jouissance)
+    'Logement': px.colors.qualitative.Vivid[3],                # Violet-bleu (même que Immobilier productif) 
+    'Transport': px.colors.qualitative.Vivid[4],               # Turquoise (même que Actifs financiers)
+    'Loisirs': px.colors.qualitative.Vivid[3],                 # Vert clair
+    'Impôts et taxes': px.colors.qualitative.Vivid[2],         # Rose-violet (même que Autres actifs)
+    'Enfants': px.colors.qualitative.Vivid[5],                 # Vert foncé
+    'Santé': px.colors.qualitative.Vivid[6],                   # Jaune-orange
+    'Remboursement de prêts': px.colors.qualitative.Vivid[1],  # Bleu
+    'Autres': px.colors.qualitative.Vivid[8],                  # Violet foncé
+    'Reste à vivre': px.colors.qualitative.Vivid[0],           # Rouge-orange pour l'épargne
+}
+
 def create_patrimoine_brut_treemap(df_patrimoine):
     """Crée le treemap de répartition du patrimoine brut."""
     df_brut = df_patrimoine[df_patrimoine['Valeur Brute'] > 0]
@@ -345,7 +359,7 @@ def create_gantt_chart_fig(gantt_data, duree_projection, parents, enfants):
 
 
 def create_flux_treemap_mensuel(data_treemap, total_revenus):
-    """Crée le treemap mensuel des flux (sans px.Constant pour éviter les liserés)."""
+    """Crée le treemap mensuel des flux (avec palette Vivid)."""
     if not data_treemap:
         return None
         
@@ -353,7 +367,9 @@ def create_flux_treemap_mensuel(data_treemap, total_revenus):
     fig = px.treemap(
         df_treemap,
         path=['label'],
-        values='montant', 
+        values='montant',
+        color='label',
+        color_discrete_map=FLUX_CATEGORY_COLOR_MAP,
         title="Vue Mensuelle"
     )
     fig.update_traces(
@@ -366,7 +382,7 @@ def create_flux_treemap_mensuel(data_treemap, total_revenus):
 
 
 def create_flux_treemap_annuel(data_treemap, total_revenus):
-    """Crée le treemap annuel des flux (sans px.Constant pour éviter les liserés)."""
+    """Crée le treemap annuel des flux (avec palette Vivid)."""
     if not data_treemap:
         return None
         
@@ -379,7 +395,9 @@ def create_flux_treemap_annuel(data_treemap, total_revenus):
     fig = px.treemap(
         df_annuel, 
         path=['label'],
-        values='montant', 
+        values='montant',
+        color='label',
+        color_discrete_map=FLUX_CATEGORY_COLOR_MAP,
         title="Vue Annuelle"
     )
     fig.update_traces(
@@ -435,4 +453,104 @@ def create_flux_treemap_annuel_old(data_treemap, total_revenus):
         textfont_size=14
     )
     fig.update_layout(margin=dict(t=50, l=10, r=10, b=10))
+    return fig
+
+def create_patrimoine_brut_composite(df_patrimoine):
+    """Crée une image composite avec treemap + barres empilées pour le patrimoine brut."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    # Créer les sous-graphiques
+    fig_treemap = create_patrimoine_brut_treemap(df_patrimoine)
+    fig_bar = create_patrimoine_brut_stacked_bar(df_patrimoine)
+    
+    if not fig_treemap or not fig_bar:
+        return None
+    
+    # Créer une figure avec des sous-graphiques
+    fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.8, 0.2],  # 80% pour le treemap, 20% pour la barre
+        specs=[[{"type": "treemap"}], [{"type": "bar"}]],
+        subplot_titles=("Répartition du Patrimoine Brut", ""),
+        vertical_spacing=0.05
+    )
+    
+    # Ajouter le treemap
+    for trace in fig_treemap.data:
+        fig.add_trace(trace, row=1, col=1)
+    
+    # Ajouter les barres empilées
+    for trace in fig_bar.data:
+        fig.add_trace(trace, row=2, col=1)
+    
+    # Mise à jour du layout
+    fig.update_layout(
+        height=600,
+        barmode='stack',  # Forcer le mode empilé
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.1,
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=60, l=10, r=10, b=80)
+    )
+    
+    # Mise à jour des axes de la barre
+    fig.update_xaxes(title_text="Pourcentage", range=[0, 100], row=2, col=1)
+    fig.update_yaxes(showticklabels=False, row=2, col=1)
+    
+    return fig
+
+def create_patrimoine_net_composite(df_patrimoine):
+    """Crée une image composite avec treemap + barres empilées pour le patrimoine net."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    # Créer les sous-graphiques
+    fig_treemap = create_patrimoine_net_treemap(df_patrimoine)
+    fig_bar = create_patrimoine_net_stacked_bar(df_patrimoine)
+    
+    if not fig_treemap or not fig_bar:
+        return None
+    
+    # Créer une figure avec des sous-graphiques
+    fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.8, 0.2],  # 80% pour le treemap, 20% pour la barre
+        specs=[[{"type": "treemap"}], [{"type": "bar"}]],
+        subplot_titles=("Répartition du Patrimoine Net", ""),
+        vertical_spacing=0.05
+    )
+    
+    # Ajouter le treemap
+    for trace in fig_treemap.data:
+        fig.add_trace(trace, row=1, col=1)
+    
+    # Ajouter les barres empilées
+    for trace in fig_bar.data:
+        fig.add_trace(trace, row=2, col=1)
+    
+    # Mise à jour du layout
+    fig.update_layout(
+        height=600,
+        barmode='stack',  # Forcer le mode empilé
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.1,
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=60, l=10, r=10, b=80)
+    )
+    
+    # Mise à jour des axes de la barre
+    fig.update_xaxes(title_text="Pourcentage", range=[0, 100], row=2, col=1)
+    fig.update_yaxes(showticklabels=False, row=2, col=1)
+    
     return fig
