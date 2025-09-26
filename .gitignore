@@ -19,6 +19,11 @@ venv.bak/
 # Graphiques générés
 charts_output/
 charts_test*/
+charts_avec_annuel/
+charts_corriges/
+charts_finaux/
+test_flux/
+test_positionnement/
 
 # IDEs
 .vscode/
