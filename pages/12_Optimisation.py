@@ -27,7 +27,7 @@ try:
         afficher_details_complementaires,
         afficher_detail_complet_parametres
     )
-    from core.tri_patch import afficher_metriques_principales_avec_tri
+    from core.tri_patch import afficher_metriques_principales_avec_tri, afficher_tableau_flux_recapitulatif
     from core.optim_calculations import (
         calculer_donnees_tableau_actifs,
         calculer_statistiques_simulation
@@ -142,6 +142,9 @@ if st.session_state.optim_dernier_resultat is not None:
     
     # Messages de contraintes
     afficher_messages_contraintes(st.session_state.optim_dernier_resultat)
+    
+    # Tableau récapitulatif des flux
+    afficher_tableau_flux_recapitulatif(st.session_state.optim_dernier_resultat)
     
     # Tableau des résultats par actif
     donnees_actifs = afficher_tableau_resultats_actifs(
