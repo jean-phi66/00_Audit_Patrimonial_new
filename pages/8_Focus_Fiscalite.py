@@ -88,7 +88,7 @@ def debug_fisca(results):
     st.header('input to OpenFisca')
     st.json(results['simulation_data'], expanded=False)
 
-def display_income_evolution_chart(results, total_salary, revenu_max_simu):
+def display_income_evolution_chart(results, revenu_brut_global_actuel, revenu_max_simu):
     """Affiche le graphique de l'évolution de l'impôt en fonction du revenu."""
     st.header("Évolution de l'impôt selon le revenu")
 
@@ -105,18 +105,43 @@ def display_income_evolution_chart(results, total_salary, revenu_max_simu):
     if bareme:
         fig = add_bracket_lines_to_fig(fig, df_evolution, bareme)
 
-    # Ajouter le point pour la situation actuelle
+    # Ajouter le point pour la situation actuelle (aligné sur la courbe)
     fig.add_scatter(
-        x=[total_salary], 
+        x=[revenu_brut_global_actuel], 
         y=[ir_actuel], 
-        mode='markers+text',
-        marker=dict(color='red', size=10), 
+        mode='markers',
+        marker=dict(color='red', size=12, symbol='circle', line=dict(width=2, color='darkred')), 
         name='Votre situation',
-        text=[f"{ir_actuel:,.0f} €"],
-        textposition="top center"
+        hovertemplate="<b>Votre situation actuelle</b><br>" +
+                      "Revenus: %{x:,.0f}€<br>" +
+                      "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
     )
     
-    fig.update_layout(xaxis_ticksuffix='€', yaxis_ticksuffix='€', xaxis_range=[0, revenu_max_simu])
+    # Ajouter le texte dans une annotation séparée pour un meilleur contrôle
+    fig.add_annotation(
+        x=revenu_brut_global_actuel,
+        y=ir_actuel,
+        text=f"<b>Votre situation</b><br>Revenus: {revenu_brut_global_actuel:,.0f}€<br>IR: {ir_actuel:,.0f}€",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor="red",
+        ax=-80,  # Décalage horizontal de la flèche (négatif = vers la gauche)
+        ay=-20,  # Décalage vertical de la flèche (négatif = vers le haut)
+        bgcolor="rgba(255, 255, 255, 0.9)",
+        bordercolor="red",
+        borderwidth=1,
+        borderpad=4,
+        font=dict(size=10, color="black")
+    )
+    
+    fig.update_layout(
+        xaxis_ticksuffix='€', 
+        yaxis_ticksuffix='€', 
+        xaxis_range=[0, revenu_max_simu],
+        title="Évolution de l'impôt selon le revenu"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 #def main():
@@ -201,6 +226,6 @@ display_quotient_familial_analysis(resultats_fiscaux)
 #st.markdown("---")
 #display_tax_calculation_waterfall(resultats_fiscaux)
 st.markdown("---")
-display_income_evolution_chart(resultats_fiscaux, sum(revenus_salaires.values()), revenu_max_graphique)
+display_income_evolution_chart(resultats_fiscaux, sum(revenus_salaires.values()) + revenu_foncier_net, revenu_max_graphique)
 st.markdown("---")
 debug_fisca(resultats_fiscaux)

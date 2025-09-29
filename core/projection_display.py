@@ -356,14 +356,12 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         return
     
     # Préparer les données pour le graphique (conversion en montants mensuels)
-    # Ordre des catégories identique aux graphiques de projection
+    # Ordre des catégories simplifiées avec regroupement fiscal
     categories_ordre = [
         'Reste à vivre',
-        'Prélèvements Sociaux', 
-        'Impôt sur le revenu',
+        'Fiscalité & Taxes',  # Regroupement IR + PS + Taxes Foncières
         'Coût des études',
         'Autres Dépenses',
-        'Taxes Foncières',
         'Charges Immobilières',
         'Mensualités Prêts'
     ]
@@ -376,11 +374,27 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         else:
             label_annee = f"Année {annee}\n({annee2_key.split('(')[0].strip()})"
         
+        # Regrouper les catégories fiscales
+        fiscalite_total = (
+            row.get('Prélèvements Sociaux', 0) +
+            row.get('Impôt sur le revenu', 0) +
+            row.get('Taxes Foncières', 0)
+        )
+        
         # Conversion des montants annuels en mensuels et empilement
         # Logique identique aux graphiques de projection : empiler toutes les composantes
+        categories_donnees = {
+            'Reste à vivre': row.get('Reste à vivre', 0),
+            'Fiscalité & Taxes': fiscalite_total,
+            'Coût des études': row.get('Coût des études', 0),
+            'Autres Dépenses': row.get('Autres Dépenses', 0),
+            'Charges Immobilières': row.get('Charges Immobilières', 0),
+            'Mensualités Prêts': row.get('Mensualités Prêts', 0)
+        }
+        
         for categorie in categories_ordre:
-            if categorie in row and row[categorie] > 0:
-                montant_mensuel = row[categorie] / 12
+            if categorie in categories_donnees and categories_donnees[categorie] > 0:
+                montant_mensuel = categories_donnees[categorie] / 12
                 donnees_graphique.append({
                     'Période': label_annee, 
                     'Type': categorie, 
@@ -393,15 +407,12 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
     # Créer le graphique en barres empilées avec les mêmes couleurs que les projections
     import plotly.express as px
     
-    # Carte de couleurs cohérente avec les graphiques de projection
-    # Utiliser les couleurs par défaut de Plotly dans le même ordre que les projections
+    # Carte de couleurs cohérente avec les graphiques de projection (adaptée aux nouvelles catégories)
     couleurs_projection = [
         '#636EFA',  # Reste à vivre (bleu)
-        '#EF553B',  # Prélèvements Sociaux (rouge)
-        '#00CC96',  # Impôt sur le revenu (vert)
+        '#EF553B',  # Fiscalité & Taxes (rouge - regroupement IR+PS+Taxes)
         '#AB63FA',  # Coût des études (violet)
         '#FFA15A',  # Autres Dépenses (orange)
-        '#19D3F3',  # Taxes Foncières (cyan)
         '#FF6692',  # Charges Immobilières (rose)
         '#B6E880',  # Mensualités Prêts (vert clair)
     ]
@@ -453,11 +464,13 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         yaxis_title='Montant Mensuel (€)',
         xaxis_title='',
         legend_title_text='Postes de dépenses',
-        barmode='stack'  # Mode empilé comme les projections
+        barmode='stack',  # Mode empilé comme les projections
+        width=800,  # Largeur fixe du graphique pour contrôler l'espacement
+        bargap=0.6  # Augmenter l'espacement entre les barres pour les rendre plus élancées
     )
     
-    # Réduire la largeur des barres pour l'esthétique (seulement les barres, pas les scatter)
-    fig.update_traces(width=0.5, selector=dict(type='bar'))
+    # Réduire significativement la largeur des barres pour un aspect plus élancé
+    fig.update_traces(width=0.25, selector=dict(type='bar'))
     
     # Ajouter les valeurs au centre de chaque barre (solution anti-superposition avancée)
     # Calculer les positions Y pour centrer le texte dans chaque segment
@@ -477,6 +490,7 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
         
         for _, row in df_periode.iterrows():
             montant = row['Montant']
+            categorie = row['Type']
             if montant > 0:  # Seulement pour les montants positifs
                 # Position Y au centre du segment
                 y_position = cumul + (montant / 2)
@@ -490,31 +504,50 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
                 font_size = 10
                 
                 if hauteur_segment >= 300 and pourcentage_du_total >= 15:
-                    # Segments larges et significatifs
+                    # Segments larges et significatifs - afficher catégorie + montant
                     afficher_montant = True
-                    font_size = 12
+                    font_size = 11
                 elif hauteur_segment >= 200 and pourcentage_du_total >= 10:
-                    # Segments moyens
+                    # Segments moyens - afficher catégorie + montant
                     afficher_montant = True
                     font_size = 10
                 elif hauteur_segment >= 150 and pourcentage_du_total >= 8:
-                    # Petits segments mais encore lisibles
+                    # Petits segments - afficher seulement le montant
                     afficher_montant = True
                     font_size = 9
                 
-                # Formater le montant selon sa taille
+                # Formater le texte selon la taille du segment
                 if montant >= 1000:
                     text_montant = f"{montant/1000:.1f}k€"
                 else:
                     text_montant = f"{montant:.0f}€"
                 
+                # Créer le texte d'annotation avec ou sans catégorie selon l'espace
+                if hauteur_segment >= 200 and pourcentage_du_total >= 10:
+                    # Segments suffisamment grands : afficher catégorie + montant avec style élégant
+                    categorie_courte = {
+                        'Reste à vivre': 'Reste à vivre',
+                        'Fiscalité & Taxes': 'Fiscalité', 
+                        'Coût des études': 'Études',
+                        'Autres Dépenses': 'Autres',
+                        'Charges Immobilières': 'Charges Immo',
+                        'Mensualités Prêts': 'Prêts'
+                    }.get(categorie, categorie)
+                    
+                    # Formatage simplifié sans séparateurs décoratifs
+                    text_annotation = f"{categorie_courte}\n{text_montant}"
+                else:
+                    # Petits segments : seulement le montant
+                    text_annotation = text_montant
+                
                 if afficher_montant:
                     annotations_a_afficher.append({
                         'x': periode,
                         'y': y_position,
-                        'text': text_montant,
+                        'text': text_annotation,
                         'font_size': font_size,
-                        'hauteur': hauteur_segment
+                        'hauteur': hauteur_segment,
+                        'categorie': categorie
                     })
                 
                 cumul += montant
@@ -558,23 +591,46 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
             else:
                 annotations_finales = annotations_importantes
         
-        # Ajouter les annotations finales au graphique
+        # Ajouter les annotations finales au graphique avec un style amélioré
         for ann in annotations_finales:
+            # Définir les couleurs selon la catégorie pour plus de cohérence
+            couleur_fond = {
+                'Reste à vivre': 'rgba(99, 110, 250, 0.9)',  # Bleu - correspond à #636EFA
+                'Fiscalité': 'rgba(239, 85, 59, 0.9)',       # Rouge - correspond à #EF553B  
+                'Études': 'rgba(171, 99, 250, 0.9)',         # Violet - correspond à #AB63FA
+                'Autres': 'rgba(255, 161, 90, 0.9)',         # Orange - correspond à #FFA15A
+                'Charges Immo': 'rgba(255, 102, 146, 0.9)',  # Rose - correspond à #FF6692
+                'Prêts': 'rgba(182, 232, 128, 0.9)'          # Vert clair - correspond à #B6E880
+            }
+            
+            # Extraire la catégorie du texte d'annotation
+            categorie_key = ann['text'].split('\n')[0] if '\n' in ann['text'] else 'Autres'
+            bg_color = couleur_fond.get(categorie_key, 'rgba(50, 50, 50, 0.85)')
+            
             fig.add_annotation(
                 x=ann['x'],
                 y=ann['y'],
-                text=f"<b>{ann['text']}</b>",
+                text=f"<b style='color:white;'>{ann['text']}</b>",
                 showarrow=False,
-                font=dict(color="white", size=ann['font_size'], family="Arial Black"),
-                bgcolor="rgba(0,0,0,0.6)",  # Fond plus opaque
-                bordercolor="white",
+                font=dict(
+                    color="white", 
+                    size=ann['font_size'], 
+                    family="Inter, -apple-system, BlinkMacSystemFont, sans-serif"
+                ),
+                bgcolor=bg_color,
+                bordercolor="rgba(255, 255, 255, 0.3)",
                 borderwidth=1,
-                borderpad=3,
+                borderpad=4,
                 xanchor='center',
-                yanchor='middle'
+                yanchor='middle',
+                # Ajouter un effet d'ombre
+                opacity=0.95,
+                # Coins arrondis simulés avec du padding
+                width=None,
+                height=None
             )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=False, width=800)
     
     # Calcul des KPI de comparaison (en montants mensuels)
     data_annee1 = df_transition[df_transition['Année'] == annee1].iloc[0]
@@ -650,22 +706,6 @@ def display_retirement_transition_analysis(df_projection, parents, settings):
             delta_color=couleur_reste,
             help=f"Pourcentage de maintien de la capacité d'épargne mensuelle entre {annee1} et {annee2}"
         )
-    
-    # Analyse textuelle
-    st.markdown("### 💡 Analyse de la transition")
-    if ratio_revenus >= 0.8:
-        st.success(f"✅ **Excellente transition** : Les revenus mensuels sont maintenus à {ratio_revenus:.1%} lors du passage à la retraite.")
-    elif ratio_revenus >= 0.6:
-        st.warning(f"⚠️ **Transition modérée** : Les revenus mensuels chutent à {ratio_revenus:.1%} lors du passage à la retraite.")
-    else:
-        st.error(f"🚨 **Transition difficile** : Les revenus mensuels chutent significativement à {ratio_revenus:.1%} lors du passage à la retraite.")
-    
-    if ratio_reste_vivre >= 0.8:
-        st.success(f"✅ **Capacité d'épargne maintenue** : Le reste à vivre mensuel représente {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
-    elif ratio_reste_vivre >= 0.5:
-        st.warning(f"⚠️ **Capacité d'épargne réduite** : Le reste à vivre mensuel représente {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
-    else:
-        st.error(f"🚨 **Capacité d'épargne fortement impactée** : Le reste à vivre mensuel ne représente que {ratio_reste_vivre:.1%} du niveau d'avant retraite.")
     
     # Tableau détaillé de comparaison
     st.markdown("### 📋 Détail de la comparaison par catégorie (montants mensuels)")

@@ -352,17 +352,110 @@ def display_summary_and_charts():
 
     st.subheader("Tableau Récapitulatif")
     df_display = df_patrimoine.copy()
+    
+    # Filtrer les lignes vides (où toutes les valeurs numériques sont 0 ou NaN)
+    df_display = df_display.dropna(subset=['Libellé'])  # Supprimer les lignes sans libellé
+    df_display = df_display[df_display['Libellé'].str.strip() != '']  # Supprimer les lignes avec libellé vide
+    
     # S'assurer que les colonnes existent avant de les réordonner pour l'affichage
     cols_to_display = ['Libellé', 'Type', 'Valeur Brute', 'Passif', 'Valeur Nette']
     existing_cols = [col for col in cols_to_display if col in df_display.columns]
+    
+    if len(df_display) == 0:
+        st.info("Aucun actif à afficher.")
+        return
+    
+    # Fonction pour appliquer les couleurs par type
+    def color_by_type(row):
+        colors = {
+            'Immobilier de jouissance': 'background-color: rgba(229, 134, 6, 0.08); border-left: 3px solid #e58606',
+            'Immobilier productif': 'background-color: rgba(93, 105, 177, 0.08); border-left: 3px solid #5d69b1',
+            'Actifs financiers': 'background-color: rgba(82, 188, 163, 0.08); border-left: 3px solid #52bca3',
+            'Placements financiers': 'background-color: rgba(82, 188, 163, 0.08); border-left: 3px solid #52bca3',
+            'Autres actifs': 'background-color: rgba(204, 97, 176, 0.08); border-left: 3px solid #cc61b0'
+        }
+        return [colors.get(row['Type'], '')] * len(row)
+    
+    # Configuration du style du tableau avec colonnes optimisées pour largeur fixe
+    styled_df = df_display[existing_cols].style.format({
+        'Valeur Brute': '{:,.0f} €',
+        'Passif': '{:,.0f} €', 
+        'Valeur Nette': '{:,.0f} €'
+    }).apply(color_by_type, axis=1).set_properties(**{
+        'font-size': '13px',
+        'padding': '8px 6px',
+        'text-align': 'left',
+        'white-space': 'nowrap'
+    }).set_table_styles([
+        {'selector': 'th', 'props': [
+            ('background-color', '#f8f9fa'),
+            ('color', '#495057'),
+            ('font-weight', '600'),
+            ('font-size', '13px'),
+            ('padding', '10px 6px'),
+            ('border-bottom', '2px solid #dee2e6'),
+            ('text-align', 'center'),
+            ('white-space', 'nowrap')
+        ]},
+        {'selector': 'th:nth-child(1)', 'props': [('width', '280px')]},  # Libellé
+        {'selector': 'th:nth-child(2)', 'props': [('width', '180px')]},  # Type
+        {'selector': 'th:nth-child(3)', 'props': [('width', '110px')]},  # Valeur Brute
+        {'selector': 'th:nth-child(4)', 'props': [('width', '100px')]},  # Passif
+        {'selector': 'th:nth-child(5)', 'props': [('width', '110px')]},  # Valeur Nette
+        {'selector': 'td:nth-child(1)', 'props': [  # Libellé
+            ('font-weight', '500'),
+            ('text-align', 'left'),
+            ('width', '280px'),
+            ('max-width', '280px'),
+            ('overflow', 'hidden'),
+            ('text-overflow', 'ellipsis'),
+            ('padding-right', '8px')
+        ]},
+        {'selector': 'td:nth-child(2)', 'props': [  # Type
+            ('font-size', '12px'),
+            ('color', '#6c757d'),
+            ('text-align', 'center'),
+            ('width', '180px'),
+            ('max-width', '180px')
+        ]},
+        {'selector': 'td:nth-child(3), td:nth-child(4), td:nth-child(5)', 'props': [  # Montants
+            ('text-align', 'right'),
+            ('font-family', 'system-ui, monospace'),
+            ('font-size', '13px'),
+            ('font-weight', '500')
+        ]},
+        {'selector': 'td:nth-child(3)', 'props': [('width', '110px')]},  # Valeur Brute
+        {'selector': 'td:nth-child(4)', 'props': [('width', '100px')]},  # Passif
+        {'selector': 'td:nth-child(5)', 'props': [  # Valeur Nette
+            ('font-weight', '600'),
+            ('background-color', 'rgba(40, 167, 69, 0.03)'),
+            ('width', '110px')
+        ]},
+        {'selector': 'table', 'props': [
+            ('border-collapse', 'separate'),
+            ('border-spacing', '0'),
+            ('border-radius', '6px'),
+            ('overflow', 'hidden'),
+            ('box-shadow', '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)'),
+            ('width', '780px'),  # Largeur totale fixe (280+180+110+100+110)
+            ('table-layout', 'fixed'),
+            ('margin', '0 auto')  # Centrer le tableau
+        ]}
+    ])
+    
+    # Affichage avec configuration optimisée pour largeur fixe
     st.dataframe(
-        df_display[existing_cols].style.format({
-            'Valeur Brute': '{:,.2f} €',
-            'Passif': '{:,.2f} €',
-            'Valeur Nette': '{:,.2f} €'
-        }),
-        use_container_width=True,
-        hide_index=True
+        styled_df,
+        use_container_width=False,
+        hide_index=True,
+        width=780,  # Largeur fixe du dataframe
+        column_config={
+            'Libellé': st.column_config.TextColumn(width=280),
+            'Type': st.column_config.TextColumn(width=180),
+            'Valeur Brute': st.column_config.NumberColumn(width=110),
+            'Passif': st.column_config.NumberColumn(width=100),
+            'Valeur Nette': st.column_config.NumberColumn(width=110)
+        }
     )
 
     chart_col1, chart_col2 = st.columns(2, gap="medium")

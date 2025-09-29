@@ -78,14 +78,7 @@ if 'depenses' in st.session_state and isinstance(st.session_state.depenses, list
             
             depenses_data.append({'Catégorie': categorie, 'Montant': montant, 'Détail': libelle})
 
-# Debug - Afficher la structure des données si nécessaire
-if st.checkbox("🔍 Debug - Afficher la structure des données"):
-    st.write("**Structure de revenus:**", type(st.session_state.get('revenus')))
-    if 'revenus' in st.session_state:
-        st.write(st.session_state.revenus)
-    st.write("**Structure de dépenses:**", type(st.session_state.get('depenses')))
-    if 'depenses' in st.session_state:
-        st.write(st.session_state.depenses)
+
 
 # Affichage des tables
 col1, col2 = st.columns(2)
@@ -128,6 +121,56 @@ if revenus_data and depenses_data:
         st.success(f"💰 **Capacité d'épargne mensuelle : {capacite_epargne:,.0f} €**".replace(',', ' '))
     elif capacite_epargne < 0:
         st.error(f"⚠️ **Déficit mensuel : {abs(capacite_epargne):,.0f} €**".replace(',', ' '))
+    else:
+        st.info("**Équilibre parfait : 0 €**")
+
+# --- Table détaillée des flux ANNUELS ---
+st.markdown("---")
+st.subheader("📅 Détail des Flux Annuels")
+
+# Affichage des tables annuelles
+col1_annual, col2_annual = st.columns(2)
+
+with col1_annual:
+    st.markdown("### 💰 Revenus Annuels")
+    if revenus_data:
+        df_revenus_annual = pd.DataFrame(revenus_data)
+        # Multiplier par 12 pour obtenir les valeurs annuelles
+        df_revenus_annual['Montant'] = df_revenus_annual['Montant'] * 12
+        # Calcul du total avant formatage
+        total_revenus_annual = df_revenus_annual['Montant'].sum()
+        # Formatage pour affichage
+        df_revenus_annual['Montant'] = df_revenus_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+        st.dataframe(df_revenus_annual, use_container_width=True, hide_index=True)
+        st.markdown(f"**Total revenus annuels : {total_revenus_annual:,.0f} €**".replace(',', ' '))
+    else:
+        st.info("Aucun revenu renseigné")
+
+with col2_annual:
+    st.markdown("### 💸 Charges Annuelles")
+    if depenses_data:
+        df_charges_annual = pd.DataFrame(depenses_data)
+        # Multiplier par 12 pour obtenir les valeurs annuelles
+        df_charges_annual['Montant'] = df_charges_annual['Montant'] * 12
+        # Calcul du total avant formatage
+        total_charges_annual = df_charges_annual['Montant'].sum()
+        # Formatage pour affichage
+        df_charges_annual['Montant'] = df_charges_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+        st.dataframe(df_charges_annual, use_container_width=True, hide_index=True)
+        st.markdown(f"**Total charges annuelles : {total_charges_annual:,.0f} €**".replace(',', ' '))
+    else:
+        st.info("Aucune charge renseignée")
+
+# Calcul et affichage de la capacité d'épargne annuelle
+if revenus_data and depenses_data:
+    # Capacité d'épargne annuelle
+    capacite_epargne_annual = capacite_epargne * 12
+    
+    st.markdown("---")
+    if capacite_epargne_annual > 0:
+        st.success(f"💰 **Capacité d'épargne annuelle : {capacite_epargne_annual:,.0f} €**".replace(',', ' '))
+    elif capacite_epargne_annual < 0:
+        st.error(f"⚠️ **Déficit annuel : {abs(capacite_epargne_annual):,.0f} €**".replace(',', ' '))
     else:
         st.info("**Équilibre parfait : 0 €**")
 
