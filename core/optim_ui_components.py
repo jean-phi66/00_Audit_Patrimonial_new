@@ -23,24 +23,30 @@ def afficher_sidebar_parametres():
         
         # Paramètres de contraintes
         st.subheader("Contraintes d'optimisation")
-        effort_max = st.number_input(
-            "Effort d'épargne maximal (€/mois)",
-            min_value=0.0,
-            max_value=10000.0,
-            value=1000.0,
-            step=50.0
-        )
         
-        mensualite_max = st.number_input(
-            "Mensualité crédit SCPI max (€/mois)",
-            min_value=0.0,
-            max_value=5000.0,
-            value=600.0,
-            step=50.0
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            effort_max = st.number_input(
+                "Épargne max",
+                min_value=0.0,
+                max_value=10000.0,
+                value=1000.0,
+                step=50.0,
+                help="€/mois"
+            )
+        
+        with col2:
+            mensualite_max = st.number_input(
+                "Crédit SCPI max",
+                min_value=0.0,
+                max_value=5000.0,
+                value=600.0,
+                step=50.0,
+                help="€/mois"
+            )
         
         capital_initial_max = st.number_input(
-            "Capital initial maximal (€)",
+            "Capital initial max (€)",
             min_value=0.0,
             max_value=1000000.0,
             value=50000.0,
@@ -113,8 +119,8 @@ def afficher_variables_optimisation():
         }
     ]
     
-    # En-têtes du tableau avec colonne vide pour créer de l'espace libre
-    col_actif, col_capital, col_versement, col_vide = st.columns([1.5, 2.3, 2.3, 2])
+    # En-têtes du tableau optimisés
+    col_actif, col_capital, col_versement = st.columns([0.8, 2.0, 2.0])
     
     with col_actif:
         st.markdown("**Actif**")
@@ -122,117 +128,118 @@ def afficher_variables_optimisation():
         st.markdown("**Capital Initial**")
     with col_versement:
         st.markdown("**Versements Mensuels**")
-    # col_vide reste vide pour créer l'espace
-    
-    st.markdown("---")
     
     # Affichage pour chaque actif
     for actif in actifs_config:
-        col_actif, col_capital, col_versement, col_vide = st.columns([1.5, 2.3, 2.3, 2])
+        col_actif, col_capital, col_versement = st.columns([0.8, 2.0, 2.0])
         
         with col_actif:
-            st.markdown(f"**{actif['emoji']} {actif['nom']}**")
+                st.markdown(f"**{actif['emoji']} {actif['nom']}**")
         
         with col_capital:
             # Layout horizontal : checkbox + valeur sur la même ligne
-            col_check_cap, col_val_cap = st.columns([1, 2])
+            col_check_cap, col_val_cap, col_dummy_cap = st.columns([1, 3, 2])
             
             with col_check_cap:
                 activer_capital = st.checkbox(
                     "Opt.",
                     key=f"activer_{actif['capital_key']}",
-                    value=st.session_state.optim_activer_vars.get(actif['capital_key'], actif['capital_default']),
-                    help="Optimiser ce paramètre"
+                    value=st.session_state.optim_activer_vars.get(actif['capital_key'], actif['capital_default'])
                 )
             
             with col_val_cap:
                 if activer_capital:
                     capital_value = st.session_state.optim_current_values[actif['capital_key']]
-                    st.markdown(f"**{capital_value:,.0f} €** (opt.)")
+                    st.markdown(f"**{capital_value:,.0f} €**")
                 else:
-                    capital_value = st.number_input(
-                        f"€",
-                        min_value=0.0,
-                        max_value=100000.0,
-                        value=st.session_state.optim_current_values[actif['capital_key']],
-                        step=1000.0,
-                        key=f"{actif['capital_key']}_fixe",
-                        label_visibility="collapsed",
-                        format="%.0f"
-                    )
-                    st.session_state.optim_current_values[actif['capital_key']] = capital_value
+                    # Colonne plus étroite pour l'input
+                    col_input = st.columns([1, 1])[0]
+                    with col_input:
+                        capital_value = st.number_input(
+                            f"€",
+                            min_value=0.0,
+                            max_value=100000.0,
+                            value=st.session_state.optim_current_values[actif['capital_key']],
+                            step=1000.0,
+                            key=f"{actif['capital_key']}_fixe",
+                            label_visibility="collapsed",
+                            format="%.0f"
+                        )
+                        st.session_state.optim_current_values[actif['capital_key']] = capital_value
             
             variables_info[actif['capital_key']] = {'activer': activer_capital, 'valeur': capital_value}
         
         with col_versement:
             # Layout horizontal : checkbox + valeur sur la même ligne
-            col_check_vers, col_val_vers = st.columns([1, 2])
+            col_check_vers, col_val_vers, col_dummy_vers = st.columns([1, 3, 2])
             
             with col_check_vers:
                 activer_versement = st.checkbox(
                     "Opt.",
                     key=f"activer_{actif['versement_key']}",
-                    value=st.session_state.optim_activer_vars.get(actif['versement_key'], actif['versement_default']),
-                    help="Optimiser ce paramètre"
+                    value=st.session_state.optim_activer_vars.get(actif['versement_key'], actif['versement_default'])
                 )
             
             with col_val_vers:
                 if activer_versement:
                     versement_value = st.session_state.optim_current_values[actif['versement_key']]
-                    st.markdown(f"**{versement_value:,.0f} €** (opt.)")
+                    st.markdown(f"**{versement_value:,.0f} €**")
                 else:
-                    versement_value = st.number_input(
-                        f"€",
-                        min_value=0.0,
-                        max_value=2000.0,
-                        value=st.session_state.optim_current_values[actif['versement_key']],
-                        step=50.0,
-                        key=f"{actif['versement_key']}_fixe",
-                        label_visibility="collapsed",
-                        format="%.0f"
-                    )
-                    st.session_state.optim_current_values[actif['versement_key']] = versement_value
+                    # Colonne plus étroite pour l'input
+                    col_input = st.columns([1, 1])[0]
+                    with col_input:
+                        versement_value = st.number_input(
+                            f"€",
+                            min_value=0.0,
+                            max_value=2000.0,
+                            value=st.session_state.optim_current_values[actif['versement_key']],
+                            step=50.0,
+                            key=f"{actif['versement_key']}_fixe",
+                            label_visibility="collapsed",
+                            format="%.0f"
+                        )
+                        st.session_state.optim_current_values[actif['versement_key']] = versement_value
             
             variables_info[actif['versement_key']] = {'activer': activer_versement, 'valeur': versement_value}
     
     # Section séparée pour le crédit SCPI
-    st.markdown("---")
-    
-    col_label, col_credit, col_empty, col_vide = st.columns([1.5, 2.3, 2.3, 2])
+    col_label, col_credit, col_empty = st.columns([0.8, 2.0, 2.0])
     
     with col_label:
         st.markdown("**🏦 Crédit SCPI**")
     
     with col_credit:
         # Layout horizontal : checkbox + valeur sur la même ligne
-        col_check_credit, col_val_credit = st.columns([1, 2])
+        col_check_credit, col_val_credit, col_dummy_credit = st.columns([1, 3, 2])
         
         with col_check_credit:
             activer_credit_scpi = st.checkbox(
                 "Opt.",
                 key="activer_credit_scpi_montant",
-                value=st.session_state.optim_activer_vars.get('credit_scpi_montant', True),
-                help="Optimiser le montant du crédit SCPI"
+                value=st.session_state.optim_activer_vars.get('credit_scpi_montant', True)
             )
         
         with col_val_credit:
             if activer_credit_scpi:
                 credit_scpi_montant = st.session_state.optim_current_values['credit_scpi_montant']
-                st.markdown(f"**{credit_scpi_montant:,.0f} €** (opt.)")
+                st.markdown(f"**{credit_scpi_montant:,.0f} €**")
             else:
-                credit_scpi_montant = st.number_input(
-                    "€",
-                    min_value=0.0,
-                    max_value=500000.0,
-                    value=st.session_state.optim_current_values['credit_scpi_montant'],
-                    step=5000.0,
-                    key="credit_scpi_montant_fixe",
-                    label_visibility="collapsed",
-                    format="%.0f"
-                )
-                st.session_state.optim_current_values['credit_scpi_montant'] = credit_scpi_montant
-        
-        variables_info['credit_scpi_montant'] = {'activer': activer_credit_scpi, 'valeur': credit_scpi_montant}
+                # Colonne plus étroite pour l'input
+                col_input = st.columns([1, 1])[0]
+                with col_input:
+                    credit_scpi_montant = st.number_input(
+                        "€",
+                        min_value=0.0,
+                        max_value=500000.0,
+                        value=st.session_state.optim_current_values['credit_scpi_montant'],
+                        step=5000.0,
+                        key="credit_scpi_montant_fixe",
+                        label_visibility="collapsed",
+                        format="%.0f"
+                    )
+                    st.session_state.optim_current_values['credit_scpi_montant'] = credit_scpi_montant
+    
+    variables_info['credit_scpi_montant'] = {'activer': activer_credit_scpi, 'valeur': credit_scpi_montant}
     
     return variables_info
 
@@ -349,32 +356,18 @@ def afficher_details_complementaires(donnees: Dict[str, Any], params: Dict[str, 
     """
     # Détails SCPI à crédit
     if donnees['credit_scpi_montant'] > 0:
-        st.info(f"""
-        **💡 Détails SCPI à crédit :**
-        - Montant emprunté : {donnees['credit_scpi_montant']:,.0f} €
-        - Mensualité crédit total : {donnees['mensualite_credit_scpi']:,.0f} €/mois
-        - Loyer brut mensuel : {donnees['revenus_scpi_bruts']:,.0f} €/mois
-        - Impôts sur revenus SCPI : {donnees['impots_scpi']:,.0f} €/mois
-        """)
+        st.write(f"**💡 SCPI à crédit :** {donnees['credit_scpi_montant']:,.0f} € - Mensualité : {donnees['mensualite_credit_scpi']:,.0f} €/mois")
     
     # Détails PER
     if donnees['versement_per'] > 0:
         economie_annuelle_per = donnees['economie_impots_per'] * 12
-        st.info(f"""
-        **💡 Détails PER - Avantage fiscal :**
-        - Économie d'impôts mensuelle : {donnees['economie_impots_per']:,.0f} €
-        - Économie d'impôts annuelle : {economie_annuelle_per:,.0f} €
-        - TMI appliqué : {params['tmi']*100:.0f}%
-        """)
+        st.write(f"**💡 PER :** Économie fiscale {economie_annuelle_per:,.0f} €/an (TMI {params['tmi']*100:.0f}%)")
     
     # Impact fiscal total
     if donnees['impact_fiscal_total'] != 0:
-        st.success(f"""
-        **📊 Impact fiscal total mensuel : {donnees['impact_fiscal_total']:+,.0f} €**
-        - Impact fiscal annuel : {donnees['impact_fiscal_total'] * 12:+,.0f} €
-        """)
+        st.write(f"**📊 Impact fiscal :** {donnees['impact_fiscal_total']:+,.0f} €/mois ({donnees['impact_fiscal_total'] * 12:+,.0f} €/an)")
     else:
-        st.info("**📊 Impact fiscal total mensuel : neutre (0 €)**")
+        st.write("**📊 Impact fiscal :** neutre")
 
 
 def afficher_graphique_waterfall(resultat_optimisation: Dict[str, Any]):
@@ -529,8 +522,6 @@ def afficher_simulation_detaillee(resultat_optimisation: Dict[str, Any]):
                 performance = df_simulation['solde_total'].iloc[-1] / effort_total if effort_total > 0 else 0
                 st.metric("Multiple", f"{performance:.2f}x")
             
-            st.markdown("---")
-            
             # Choix de l'affichage
             mode_affichage = st.radio(
                 "Mode d'affichage :",
@@ -651,7 +642,6 @@ def afficher_simulation_detaillee(resultat_optimisation: Dict[str, Any]):
         
         except Exception as e:
             st.error(f"❌ Erreur lors de la simulation : {str(e)}")
-            st.info("💡 Vérifiez que l'optimisation a été exécutée avec succès")
 
 
 def afficher_parametres_avances():

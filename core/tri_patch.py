@@ -208,7 +208,7 @@ def _afficher_flux_mensuels(df_res: pd.DataFrame, resultat_optimisation: Dict[st
             mois_debut = (annee_debut - 1) * 12
             mois_fin = min(mois_debut + 12, max_mois)
             
-            st.info(f"📅 Affichage des mois {mois_debut + 1} à {mois_fin} (Année {annee_debut})")
+            st.write(f"**Année {annee_debut}** (mois {mois_debut + 1} à {mois_fin})")
             df_affichage_page = df_affichage.iloc[mois_debut:mois_fin]
         else:
             df_affichage_page = df_affichage
