@@ -24,27 +24,27 @@ def afficher_sidebar_parametres():
         # Paramètres de contraintes
         st.subheader("Contraintes d'optimisation")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            effort_max = st.number_input(
-                "Épargne max",
-                min_value=0.0,
-                max_value=10000.0,
-                value=1000.0,
-                step=50.0,
-                help="€/mois"
-            )
-        
-        with col2:
-            mensualite_max = st.number_input(
-                "Crédit SCPI max",
-                min_value=0.0,
-                max_value=5000.0,
-                value=600.0,
-                step=50.0,
-                help="€/mois"
-            )
-        
+        #col1, col2 = st.columns(2)
+        #with col1:
+        effort_max = st.number_input(
+            "Épargne max",
+            min_value=0.0,
+            max_value=10000.0,
+            value=1000.0,
+            step=50.0,
+            help="€/mois"
+        )
+    
+        #with col2:
+        mensualite_max = st.number_input(
+            "Crédit SCPI max",
+            min_value=0.0,
+            max_value=5000.0,
+            value=600.0,
+            step=50.0,
+            help="€/mois"
+        )
+    
         capital_initial_max = st.number_input(
             "Capital initial max (€)",
             min_value=0.0,
@@ -79,6 +79,30 @@ def afficher_variables_optimisation():
     st.header("🎯 Variables d'optimisation")
     st.markdown("Configurez les paramètres à optimiser. Cochez pour activer l'optimisation, décochez pour fixer une valeur.")
     
+    # Sélection des actifs à utiliser
+    st.subheader("📈 Sélection des actifs")
+    
+    # Options d'actifs disponibles
+    actifs_disponibles = {
+        'Assurance Vie': {'emoji': '💰', 'nom': 'Assurance Vie'},
+        'PER': {'emoji': '🏛️', 'nom': 'PER'},
+        'SCPI': {'emoji': '🏢', 'nom': 'SCPI'}
+    }
+    
+    # Multiselect pour choisir les actifs
+    actifs_selectionnes = st.multiselect(
+        "Choisissez les actifs à inclure dans l'optimisation :",
+        options=list(actifs_disponibles.keys()),
+        default=['Assurance Vie', 'PER', 'SCPI'],
+        format_func=lambda x: f"{actifs_disponibles[x]['emoji']} {actifs_disponibles[x]['nom']}"
+    )
+    
+    if not actifs_selectionnes:
+        st.warning("⚠️ Veuillez sélectionner au moins un actif pour l'optimisation.")
+        return {}
+    
+    st.markdown("---")
+    
     # CSS pour limiter la largeur du tableau d'optimisation
     st.markdown("""
     <style>
@@ -91,9 +115,9 @@ def afficher_variables_optimisation():
     
     variables_info = {}
     
-    # Configuration des actifs
-    actifs_config = [
-        {
+    # Configuration complète des actifs
+    tous_actifs_config = {
+        'Assurance Vie': {
             'nom': 'Assurance Vie',
             'emoji': '💰',
             'capital_key': 'capital_av',
@@ -101,7 +125,7 @@ def afficher_variables_optimisation():
             'capital_default': True,
             'versement_default': True
         },
-        {
+        'PER': {
             'nom': 'PER',
             'emoji': '🏛️',
             'capital_key': 'capital_per',
@@ -109,7 +133,7 @@ def afficher_variables_optimisation():
             'capital_default': False,
             'versement_default': True
         },
-        {
+        'SCPI': {
             'nom': 'SCPI',
             'emoji': '🏢',
             'capital_key': 'capital_scpi',
@@ -117,7 +141,10 @@ def afficher_variables_optimisation():
             'capital_default': True,
             'versement_default': False
         }
-    ]
+    }
+    
+    # Filtrage des actifs selon la sélection
+    actifs_config = [tous_actifs_config[actif] for actif in actifs_selectionnes]
     
     # En-têtes du tableau optimisés
     col_actif, col_capital, col_versement = st.columns([0.8, 2.0, 2.0])
@@ -202,44 +229,48 @@ def afficher_variables_optimisation():
             
             variables_info[actif['versement_key']] = {'activer': activer_versement, 'valeur': versement_value}
     
-    # Section séparée pour le crédit SCPI
-    col_label, col_credit, col_empty = st.columns([0.8, 2.0, 2.0])
-    
-    with col_label:
-        st.markdown("**🏦 Crédit SCPI**")
-    
-    with col_credit:
-        # Layout horizontal : checkbox + valeur sur la même ligne
-        col_check_credit, col_val_credit, col_dummy_credit = st.columns([1, 3, 2])
+    # Section crédit SCPI (seulement si SCPI sélectionnée)
+    if 'SCPI' in actifs_selectionnes:
+        col_label, col_credit, col_empty = st.columns([0.8, 2.0, 2.0])
         
-        with col_check_credit:
-            activer_credit_scpi = st.checkbox(
-                "Opt.",
-                key="activer_credit_scpi_montant",
-                value=st.session_state.optim_activer_vars.get('credit_scpi_montant', True)
-            )
+        with col_label:
+            st.markdown("**🏦 Crédit SCPI**")
         
-        with col_val_credit:
-            if activer_credit_scpi:
-                credit_scpi_montant = st.session_state.optim_current_values['credit_scpi_montant']
-                st.markdown(f"**{credit_scpi_montant:,.0f} €**")
-            else:
-                # Colonne plus étroite pour l'input
-                col_input = st.columns([1, 1])[0]
-                with col_input:
-                    credit_scpi_montant = st.number_input(
-                        "€",
-                        min_value=0.0,
-                        max_value=500000.0,
-                        value=st.session_state.optim_current_values['credit_scpi_montant'],
-                        step=5000.0,
-                        key="credit_scpi_montant_fixe",
-                        label_visibility="collapsed",
-                        format="%.0f"
-                    )
-                    st.session_state.optim_current_values['credit_scpi_montant'] = credit_scpi_montant
-    
-    variables_info['credit_scpi_montant'] = {'activer': activer_credit_scpi, 'valeur': credit_scpi_montant}
+        with col_credit:
+            # Layout horizontal : checkbox + valeur sur la même ligne
+            col_check_credit, col_val_credit = st.columns([1, 3])
+            
+            with col_check_credit:
+                activer_credit_scpi = st.checkbox(
+                    "Opt.",
+                    key="activer_credit_scpi_montant",
+                    value=st.session_state.optim_activer_vars.get('credit_scpi_montant', True)
+                )
+            
+            with col_val_credit:
+                if activer_credit_scpi:
+                    credit_scpi_montant = st.session_state.optim_current_values['credit_scpi_montant']
+                    st.markdown(f"**{credit_scpi_montant:,.0f} €**")
+                else:
+                    # Colonne plus étroite pour l'input
+                    col_input = st.columns([1, 1])[0]
+                    with col_input:
+                        credit_scpi_montant = st.number_input(
+                            "€",
+                            min_value=0.0,
+                            max_value=500000.0,
+                            value=st.session_state.optim_current_values['credit_scpi_montant'],
+                            step=5000.0,
+                            key="credit_scpi_montant_fixe",
+                            label_visibility="collapsed",
+                            format="%.0f"
+                        )
+                        st.session_state.optim_current_values['credit_scpi_montant'] = credit_scpi_montant
+        
+        variables_info['credit_scpi_montant'] = {'activer': activer_credit_scpi, 'valeur': credit_scpi_montant}
+    else:
+        # Si SCPI n'est pas sélectionnée, désactiver le crédit SCPI
+        variables_info['credit_scpi_montant'] = {'activer': False, 'valeur': 0.0}
     
     return variables_info
 

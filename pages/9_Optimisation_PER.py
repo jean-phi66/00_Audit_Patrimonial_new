@@ -66,7 +66,38 @@ def display_one_shot_tab(results, salary):
     st.divider()
     st.subheader("Évolution de l'impôt selon le revenu")
     fig = create_base_tax_evolution_fig(results)
-    fig.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='Votre situation')
+    
+    # Ajouter le point pour la situation actuelle (aligné sur la courbe)
+    fig.add_scatter(
+        x=[salary], 
+        y=[IR_one_shot], 
+        mode='markers',
+        marker=dict(color='red', size=12, symbol='circle', line=dict(width=2, color='darkred')), 
+        name='Votre situation',
+        hovertemplate="<b>Votre situation actuelle</b><br>" +
+                      "Revenus: %{x:,.0f}€<br>" +
+                      "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
+    )
+    
+    # Ajouter le texte dans une annotation séparée pour un meilleur contrôle
+    fig.add_annotation(
+        x=salary,
+        y=IR_one_shot,
+        text=f"<b>Votre situation</b><br>Revenus: {salary:,.0f}€<br>IR: {IR_one_shot:,.0f}€",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor="red",
+        ax=-80,  # Décalage horizontal de la flèche (négatif = vers la gauche)
+        ay=-20,  # Décalage vertical de la flèche (négatif = vers le haut)
+        bgcolor="rgba(255, 255, 255, 0.9)",
+        bordercolor="red",
+        borderwidth=1,
+        borderpad=4,
+        font=dict(size=10, color="black")
+    )
+    
     st.plotly_chart(fig, use_container_width=True)
 
 def display_per_optim_tab(results, salary, ir_residuel_min):
@@ -98,12 +129,72 @@ def display_per_optim_tab(results, salary, ir_residuel_min):
     st.divider()
     st.subheader("Visualisation de l'optimisation")
     fig = create_base_tax_evolution_fig(results)
-    fig.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='IR initial')
+    
+    # Point initial avec annotation
+    fig.add_scatter(
+        x=[salary], 
+        y=[IR_one_shot], 
+        mode='markers',
+        marker=dict(color='red', size=12, symbol='circle', line=dict(width=2, color='darkred')), 
+        name='IR initial',
+        hovertemplate="<b>IR initial</b><br>" +
+                      "Revenus: %{x:,.0f}€<br>" +
+                      "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
+    )
+    
+    # Annotation pour le point initial
+    fig.add_annotation(
+        x=salary,
+        y=IR_one_shot,
+        text=f"<b>IR initial</b><br>Revenus: {salary:,.0f}€<br>IR: {IR_one_shot:,.0f}€",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor="red",
+        ax=-80,
+        ay=-20,
+        bgcolor="rgba(255, 255, 255, 0.9)",
+        bordercolor="red",
+        borderwidth=1,
+        borderpad=4,
+        font=dict(size=10, color="black")
+    )
     
     if not results['df_income_tax_evol'].empty and versement_optimal > 0:
         # Trouve le point sur la courbe d'impôt originale qui correspond à l'impôt après versement PER
         equivalent_row = results['df_income_tax_evol'].iloc[(results['df_income_tax_evol']['IR'] - impot_final).abs().argmin()]
-        fig.add_scatter(x=[equivalent_row['Revenu']], y=[equivalent_row['IR']], text=format_space_thousand_sep(impot_final), marker=dict(color='green', size=10), name='IR après versement')
+        
+        # Point après versement avec annotation
+        fig.add_scatter(
+            x=[equivalent_row['Revenu']], 
+            y=[equivalent_row['IR']], 
+            mode='markers',
+            marker=dict(color='green', size=12, symbol='circle', line=dict(width=2, color='darkgreen')), 
+            name='IR après versement',
+            hovertemplate="<b>IR après versement PER</b><br>" +
+                          "Revenus équivalents: %{x:,.0f}€<br>" +
+                          "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
+        )
+        
+        # Annotation pour le point après versement
+        fig.add_annotation(
+            x=equivalent_row['Revenu'],
+            y=equivalent_row['IR'],
+            text=f"<b>IR après versement</b><br>Revenus équiv.: {equivalent_row['Revenu']:,.0f}€<br>IR: {impot_final:,.0f}€",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor="green",
+            ax=80,  # Décalage vers la droite pour éviter le chevauchement
+            ay=-20,
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="green",
+            borderwidth=1,
+            borderpad=4,
+            font=dict(size=10, color="black")
+        )
     
     if ir_residuel_min > 0:
         fig.add_hline(
@@ -144,13 +235,70 @@ def display_per_effect_tab(results, salary, plafond_PER, ir_residuel_min):
     st.subheader("Impact du versement sur la courbe d'imposition")
     fig_impact = create_base_tax_evolution_fig(results)
     
-    # Point de départ
-    fig_impact.add_scatter(x=[salary], y=[IR_one_shot], text=format_space_thousand_sep(IR_one_shot), marker=dict(color='red', size=10), name='IR initial')
+    # Point de départ avec annotation
+    fig_impact.add_scatter(
+        x=[salary], 
+        y=[IR_one_shot], 
+        mode='markers',
+        marker=dict(color='red', size=12, symbol='circle', line=dict(width=2, color='darkred')), 
+        name='IR initial',
+        hovertemplate="<b>IR initial</b><br>" +
+                      "Revenus: %{x:,.0f}€<br>" +
+                      "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
+    )
     
-    # Point d'arrivée après versement
+    # Annotation pour le point initial
+    fig_impact.add_annotation(
+        x=salary,
+        y=IR_one_shot,
+        text=f"<b>IR initial</b><br>Revenus: {salary:,.0f}€<br>IR: {IR_one_shot:,.0f}€",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor="red",
+        ax=-80,
+        ay=-20,
+        bgcolor="rgba(255, 255, 255, 0.9)",
+        bordercolor="red",
+        borderwidth=1,
+        borderpad=4,
+        font=dict(size=10, color="black")
+    )
+    
+    # Point d'arrivée après versement avec annotation
     if not results['df_income_tax_evol'].empty and versement_input > 0:
         equivalent_row = results['df_income_tax_evol'].iloc[(results['df_income_tax_evol']['IR'] - ir_versement).abs().argmin()]
-        fig_impact.add_scatter(x=[equivalent_row['Revenu']], y=[equivalent_row['IR']], text=format_space_thousand_sep(ir_versement), marker=dict(color='green', size=10), name='IR après versement')
+        
+        fig_impact.add_scatter(
+            x=[equivalent_row['Revenu']], 
+            y=[equivalent_row['IR']], 
+            mode='markers',
+            marker=dict(color='green', size=12, symbol='circle', line=dict(width=2, color='darkgreen')), 
+            name='IR après versement',
+            hovertemplate="<b>IR après versement PER</b><br>" +
+                          "Revenus équivalents: %{x:,.0f}€<br>" +
+                          "Impôt sur le revenu: %{y:,.0f}€<extra></extra>"
+        )
+        
+        # Annotation pour le point après versement
+        fig_impact.add_annotation(
+            x=equivalent_row['Revenu'],
+            y=equivalent_row['IR'],
+            text=f"<b>IR après versement</b><br>Revenus équiv.: {equivalent_row['Revenu']:,.0f}€<br>IR: {ir_versement:,.0f}€",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor="green",
+            ax=80,
+            ay=-20,
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="green",
+            borderwidth=1,
+            borderpad=4,
+            font=dict(size=10, color="black")
+        )
     
     if ir_residuel_min > 0:
         fig_impact.add_hline(
@@ -171,7 +319,40 @@ def display_per_effect_tab(results, salary, plafond_PER, ir_residuel_min):
     df_per_filtered["Economie_IR"] = IR_one_shot - df_per_filtered['IR']
     
     fig_eco = px.line(df_per_filtered, x='Versement_PER', y='Economie_IR', labels={'Versement_PER': 'Versement PER', 'Economie_IR': "Économie d'impôt"})
-    fig_eco.add_scatter(x=[versement_input], y=[economie], text=format_space_thousand_sep(economie), marker=dict(color='green', size=10), name='Votre sélection', showlegend=False)
+    
+    # Ajouter le point de sélection avec annotation
+    fig_eco.add_scatter(
+        x=[versement_input], 
+        y=[economie], 
+        mode='markers',
+        marker=dict(color='green', size=12, symbol='circle', line=dict(width=2, color='darkgreen')), 
+        name='Votre sélection',
+        showlegend=False,
+        hovertemplate="<b>Votre sélection</b><br>" +
+                      "Versement PER: %{x:,.0f}€<br>" +
+                      "Économie d'impôt: %{y:,.0f}€<extra></extra>"
+    )
+    
+    # Annotation pour le point sélectionné (seulement si versement > 0)
+    if versement_input > 0:
+        fig_eco.add_annotation(
+            x=versement_input,
+            y=economie,
+            text=f"<b>Votre sélection</b><br>Versement: {versement_input:,.0f}€<br>Économie: {economie:,.0f}€",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor="green",
+            ax=-80,
+            ay=-20,
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="green",
+            borderwidth=1,
+            borderpad=4,
+            font=dict(size=10, color="black")
+        )
+    
     fig_eco.update_layout(title="Économie d'impôt en fonction du versement PER", xaxis_ticksuffix='€', yaxis_ticksuffix='€')
     st.plotly_chart(fig_eco, use_container_width=True)
 
