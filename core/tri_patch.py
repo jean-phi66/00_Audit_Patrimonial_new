@@ -164,12 +164,11 @@ def _afficher_flux_mensuels(df_res: pd.DataFrame, resultat_optimisation: Dict[st
         'versement_av_mensuel': 'Versement AV (€)',
         'versement_per_mensuel': 'Versement PER (€)',
         'versement_scpi_mensuel': 'Versement SCPI (€)',
-        'effort_epargne_mensuel': 'Effort Total (€)',
+        'mensualite_credit_scpi_mensuel': 'Mensualité Crédit SCPI (€)',
+        'revenu_scpi_brut_mensuel': 'Loyers SCPI (€)',
         'economie_impot_per_mensuelle': 'Économie PER (€)',
         'impot_scpi_mensuel': 'Impôt SCPI (€)',
-        'solde_av_mensuel': 'Solde AV (€)',
-        'solde_per_mensuel': 'Solde PER (€)',
-        'solde_scpi_mensuel': 'Solde SCPI (€)'
+        'effort_epargne_mensuel': 'Effort Total (€)'
     }
     
     # Vérification des colonnes disponibles
@@ -224,7 +223,7 @@ def _afficher_flux_mensuels(df_res: pd.DataFrame, resultat_optimisation: Dict[st
     # Résumé de la période affichée
     if len(df_affichage_page) > 0:
         with st.expander("📊 Résumé de la période affichée"):
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4, col5 = st.columns(5)
             
             # Calculs sur la période affichée (en remettant les valeurs numériques)
             df_calcul = df_res.iloc[mois_debut:mois_fin] if 'mois_debut' in locals() else df_res
@@ -234,10 +233,18 @@ def _afficher_flux_mensuels(df_res: pd.DataFrame, resultat_optimisation: Dict[st
                 st.metric("Total effort épargne", f"{effort_total_periode:,.0f} €")
             
             with col2:
+                mensualites_credit_periode = df_calcul['mensualite_credit_scpi_mensuel'].sum() if 'mensualite_credit_scpi_mensuel' in df_calcul else 0
+                st.metric("Total mensualités crédit", f"{mensualites_credit_periode:,.0f} €")
+            
+            with col3:
+                loyers_scpi_periode = df_calcul['revenu_scpi_brut_mensuel'].sum() if 'revenu_scpi_brut_mensuel' in df_calcul else 0
+                st.metric("Total loyers SCPI", f"{loyers_scpi_periode:,.0f} €")
+            
+            with col4:
                 economie_per_periode = df_calcul['economie_impot_per_mensuelle'].sum() if 'economie_impot_per_mensuelle' in df_calcul else 0
                 st.metric("Total économie PER", f"{economie_per_periode:,.0f} €")
             
-            with col3:
+            with col5:
                 impots_scpi_periode = df_calcul['impot_scpi_mensuel'].sum() if 'impot_scpi_mensuel' in df_calcul else 0
                 st.metric("Total impôts SCPI", f"{impots_scpi_periode:,.0f} €")
 
@@ -252,23 +259,17 @@ def _afficher_flux_annuels(df_res: pd.DataFrame, resultat_optimisation: Dict[str
     # Agrégation par année
     colonnes_a_sommer = [
         'versement_av_mensuel', 'versement_per_mensuel', 'versement_scpi_mensuel',
+        'mensualite_credit_scpi_mensuel', 'revenu_scpi_brut_mensuel',
         'effort_epargne_mensuel', 'economie_impot_per_mensuelle', 'impot_scpi_mensuel'
-    ]
-    
-    colonnes_a_prendre_dernier = [
-        'solde_av_mensuel', 'solde_per_mensuel', 'solde_scpi_mensuel'
     ]
     
     # Vérification des colonnes disponibles
     colonnes_somme_dispo = [col for col in colonnes_a_sommer if col in df_annuel.columns]
-    colonnes_dernier_dispo = [col for col in colonnes_a_prendre_dernier if col in df_annuel.columns]
     
     # Agrégation
     agg_dict = {}
     for col in colonnes_somme_dispo:
         agg_dict[col] = 'sum'
-    for col in colonnes_dernier_dispo:
-        agg_dict[col] = 'last'
     
     if not agg_dict:
         st.error("❌ Aucune colonne de données trouvée pour l'agrégation")
@@ -282,12 +283,11 @@ def _afficher_flux_annuels(df_res: pd.DataFrame, resultat_optimisation: Dict[str
         'versement_av_mensuel': 'Versements AV (€)',
         'versement_per_mensuel': 'Versements PER (€)', 
         'versement_scpi_mensuel': 'Versements SCPI (€)',
-        'effort_epargne_mensuel': 'Effort Total (€)',
+        'mensualite_credit_scpi_mensuel': 'Mensualités Crédit SCPI (€)',
+        'revenu_scpi_brut_mensuel': 'Loyers SCPI (€)',
         'economie_impot_per_mensuelle': 'Économie PER (€)',
         'impot_scpi_mensuel': 'Impôts SCPI (€)',
-        'solde_av_mensuel': 'Solde AV fin (€)',
-        'solde_per_mensuel': 'Solde PER fin (€)',
-        'solde_scpi_mensuel': 'Solde SCPI fin (€)'
+        'effort_epargne_mensuel': 'Effort Total (€)'
     }
     
     # Formatage des données
@@ -312,7 +312,7 @@ def _afficher_flux_annuels(df_res: pd.DataFrame, resultat_optimisation: Dict[str
     
     # Résumé sur toute la période
     with st.expander("📊 Résumé sur toute la période"):
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         # Calculs de synthèse (en utilisant les données numériques originales)
         with col1:
@@ -320,21 +320,17 @@ def _afficher_flux_annuels(df_res: pd.DataFrame, resultat_optimisation: Dict[str
             st.metric("Effort total", f"{effort_total:,.0f} €")
         
         with col2:
+            mensualites_credit_total = df_res['mensualite_credit_scpi_mensuel'].sum() if 'mensualite_credit_scpi_mensuel' in df_res else 0
+            st.metric("Mensualités crédit totales", f"{mensualites_credit_total:,.0f} €")
+        
+        with col3:
+            loyers_scpi_total = df_res['revenu_scpi_brut_mensuel'].sum() if 'revenu_scpi_brut_mensuel' in df_res else 0
+            st.metric("Loyers SCPI totaux", f"{loyers_scpi_total:,.0f} €")
+        
+        with col4:
             economie_per_total = df_res['economie_impot_per_mensuelle'].sum() if 'economie_impot_per_mensuelle' in df_res else 0
             st.metric("Économie PER totale", f"{economie_per_total:,.0f} €")
         
-        with col3:
+        with col5:
             impots_scpi_total = df_res['impot_scpi_mensuel'].sum() if 'impot_scpi_mensuel' in df_res else 0
             st.metric("Impôts SCPI totaux", f"{impots_scpi_total:,.0f} €")
-        
-        with col4:
-            # Calcul du solde final total
-            solde_final_total = 0
-            if 'solde_av_mensuel' in df_res.columns:
-                solde_final_total += df_res['solde_av_mensuel'].iloc[-1]
-            if 'solde_per_mensuel' in df_res.columns:
-                solde_final_total += df_res['solde_per_mensuel'].iloc[-1]
-            if 'solde_scpi_mensuel' in df_res.columns:
-                solde_final_total += df_res['solde_scpi_mensuel'].iloc[-1]
-            
-            st.metric("Patrimoine final", f"{solde_final_total:,.0f} €")
