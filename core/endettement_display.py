@@ -123,22 +123,74 @@ def display_loan_simulator(remaining_capacity):
         st.info("Votre capacité d'emprunt restante est nulle ou négative. Vous ne pouvez pas contracter de nouveau prêt selon ces critères.")
         return
 
-    st.markdown(f"Avec une capacité de remboursement de **{remaining_capacity:,.2f} €/mois**, voici ce que vous pourriez emprunter :")
+    # Organisation en deux colonnes principales : Paramètres (1/3) et Résultats (2/3)
+    params_col, results_col = st.columns([1, 2])
     
-    sim_col1, sim_col2 = st.columns(2)
-    with sim_col1:
-        sim_duree_annees = st.slider("Durée du nouveau prêt (années)", min_value=5, max_value=30, value=25, step=1)
-    with sim_col2:
-        sim_taux_annuel = st.slider("Taux d'intérêt annuel (%)", min_value=0.5, max_value=8.0, value=3.5, step=0.1)
+    with params_col:
+        st.markdown("##### ⚙️ Paramètres du prêt")
+        
+        sim_mensualite = st.number_input(
+            "Mensualité souhaitée (€)", 
+            min_value=0.0, 
+            max_value=float(remaining_capacity * 2),  # Limite à 2x la capacité max
+            value=float(remaining_capacity),  # Valeur initiale = capacité restante
+            step=50.0,
+            format="%.0f",
+            help=f"Votre capacité maximale est de {remaining_capacity:,.0f} €/mois"
+        )
+        
+        sim_duree_annees = st.number_input(
+            "Durée du prêt (années)", 
+            min_value=5, 
+            max_value=30, 
+            value=25, 
+            step=1,
+            format="%d"
+        )
+        
+        sim_taux_annuel = st.number_input(
+            "Taux d'intérêt annuel (%)", 
+            min_value=0.5, 
+            max_value=10.0, 
+            value=3.5, 
+            step=0.1,
+            format="%.2f"
+        )
 
-    sim_duree_mois = sim_duree_annees * 12
-    
-    montant_empruntable = calculate_loan_principal(remaining_capacity, sim_taux_annuel, sim_duree_mois)
+    with results_col:
+        st.markdown("##### 📊 Résultats de la simulation")
+        
+        sim_duree_mois = sim_duree_annees * 12
+        
+        # Calcul du montant empruntable avec la mensualité choisie
+        montant_empruntable = calculate_loan_principal(sim_mensualite, sim_taux_annuel, sim_duree_mois)
 
-    st.metric(
-        label=f"Montant empruntable sur {sim_duree_annees} ans à {sim_taux_annuel}%",
-        value=f"{montant_empruntable:,.0f} €"
-    )
+        # Montant empruntable
+        st.metric(
+            label="Montant empruntable",
+            value=f"{montant_empruntable:,.0f} €"
+        )
+        
+        # Indicateur de dépassement de capacité
+        if sim_mensualite > remaining_capacity:
+            surplus = sim_mensualite - remaining_capacity
+            st.metric(
+                label="⚠️ Dépassement de capacité",
+                value=f"+{surplus:,.0f} €/mois",
+                delta=f"Capacité max: {remaining_capacity:,.0f} €",
+                delta_color="inverse"
+            )
+        else:
+            disponible = remaining_capacity - sim_mensualite
+            st.metric(
+                label="✅ Capacité restante",
+                value=f"{disponible:,.0f} €/mois",
+                delta=f"Sur {remaining_capacity:,.0f} € max",
+                delta_color="normal"
+            )
+        
+        # Informations complémentaires
+        st.info(f"**Récapitulatif :** {montant_empruntable:,.0f} € sur {sim_duree_annees} ans à {sim_taux_annuel}%")
 
 def display_weighted_income_details(weighted_income_data):
     """
