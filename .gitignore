@@ -1,6 +1,9 @@
 # Dossiers de données client
 json_client/
 
+# Fichiers inutilisés
+trash/
+
 # Python
 __pycache__/
 *.py[cod]
