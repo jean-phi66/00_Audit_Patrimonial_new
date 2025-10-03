@@ -18,6 +18,15 @@ def afficher_sidebar_parametres():
     Returns:
         Dictionnaire avec les valeurs des paramètres saisis
     """
+    # Initialisation des valeurs par défaut dans session_state si nécessaire
+    if 'optim_sidebar_params' not in st.session_state:
+        st.session_state.optim_sidebar_params = {
+            'effort_max': 1000.0,
+            'mensualite_max': 600.0,
+            'capital_initial_max': 50000.0,
+            'plafond_per_annuel': st.session_state.optim_params.get('plafond_per_annuel', 27840.0)
+        }
+    
     with st.sidebar:
         st.header("🔧 Paramètres de simulation")
         
@@ -29,33 +38,45 @@ def afficher_sidebar_parametres():
         effort_max = st.number_input(
             "Épargne max",
             min_value=0.0,
-            value=1000.0,
+            value=st.session_state.optim_sidebar_params['effort_max'],
             step=50.0,
-            help="€/mois"
+            help="€/mois",
+            key="optim_effort_max_input"
         )
     
         #with col2:
         mensualite_max = st.number_input(
             "Crédit SCPI max",
             min_value=0.0,
-            value=600.0,
+            value=st.session_state.optim_sidebar_params['mensualite_max'],
             step=50.0,
-            help="€/mois"
+            help="€/mois",
+            key="optim_mensualite_max_input"
         )
     
         capital_initial_max = st.number_input(
             "Capital initial max (€)",
             min_value=0.0,
-            value=50000.0,
-            step=1000.0
+            value=st.session_state.optim_sidebar_params['capital_initial_max'],
+            step=1000.0,
+            key="optim_capital_initial_max_input"
         )
                 
         plafond_per_annuel = st.number_input(
             "Plafond PER annuel (€)",
             min_value=0.0,
-            value=st.session_state.optim_params['plafond_per_annuel'],
-            step=100.0
+            value=st.session_state.optim_sidebar_params['plafond_per_annuel'],
+            step=100.0,
+            key="optim_plafond_per_annuel_input"
         )
+        
+        # Sauvegarde des valeurs dans session_state
+        st.session_state.optim_sidebar_params.update({
+            'effort_max': effort_max,
+            'mensualite_max': mensualite_max,
+            'capital_initial_max': capital_initial_max,
+            'plafond_per_annuel': plafond_per_annuel
+        })
     
     return {
         'effort_max': effort_max,

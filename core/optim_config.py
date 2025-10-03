@@ -49,6 +49,14 @@ def initialiser_session_state():
             'credit_scpi_montant': True
         }
         
+        # Paramètres persistants de la sidebar
+        st.session_state.optim_sidebar_params = {
+            'effort_max': 1000.0,
+            'mensualite_max': 600.0,
+            'capital_initial_max': 50000.0,
+            'plafond_per_annuel': 27840.0  # Valeur par défaut
+        }
+        
         # Résultats de la dernière optimisation
         st.session_state.optim_dernier_resultat = None
 
@@ -60,9 +68,12 @@ def mettre_a_jour_parametres_sidebar(parametres_sidebar: Dict[str, Any]):
     Args:
         parametres_sidebar: Dictionnaire des paramètres saisis dans la sidebar
     """
-    # Mise à jour du plafond PER
+    # Mise à jour du plafond PER dans les paramètres d'optimisation
     if parametres_sidebar['plafond_per_annuel'] != st.session_state.optim_params['plafond_per_annuel']:
         st.session_state.optim_params['plafond_per_annuel'] = parametres_sidebar['plafond_per_annuel']
+    
+    # Synchronisation avec le session_state persistant (déjà fait dans afficher_sidebar_parametres)
+    # Cette fonction garde sa logique actuelle pour la compatibilité
 
 
 def mettre_a_jour_variables_optimisation(variables_info: Dict[str, Dict[str, Any]]):
