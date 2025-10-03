@@ -373,3 +373,27 @@ def calculate_savings_effort(asset, loans, total_annual_tax, year=None):
 
     cash_flow = loyers_mensuels - charges_mensuelles - taxe_fonciere_mensuelle - mensualites_prets - (total_annual_tax / 12)
     return cash_flow
+
+def calculate_loan_principal(monthly_payment, annual_rate_pct, duration_months):
+    """
+    Calcule le capital d'un prêt à partir de la mensualité, du taux et de la durée.
+    Inverse de `calculate_monthly_payment`.
+    
+    Args:
+        monthly_payment (float): Mensualité du prêt
+        annual_rate_pct (float): Taux d'intérêt annuel en pourcentage
+        duration_months (int): Durée du prêt en mois
+        
+    Returns:
+        float: Capital du prêt
+    """
+    if duration_months <= 0 or annual_rate_pct is None or monthly_payment <= 0:
+        return 0.0
+
+    monthly_rate = (annual_rate_pct / 100) / 12
+
+    if monthly_rate == 0:
+        return monthly_payment * duration_months
+
+    principal = monthly_payment * (1 - (1 + monthly_rate)**-duration_months) / monthly_rate
+    return principal
