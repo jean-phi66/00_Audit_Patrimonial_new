@@ -154,7 +154,7 @@ def add_bracket_lines_to_fig(fig, df_simulation, bareme_annee_simulation):
         rbg_threshold = row['Revenu']
         if bracket_index > 0 and bareme_annee_simulation:
             official_rate = bareme_annee_simulation.rates[bracket_index]
-            fig.add_vline(x=rbg_threshold, line_width=1, line_dash="dash", line_color="grey", annotation_text=f"TMI {int(official_rate*100)}%", annotation_position="top right", annotation_font_size=10)
+            fig.add_vline(x=rbg_threshold, line_width=1, line_dash="dash", line_color="grey", annotation_text=f"TMI {int(official_rate*100)}%", annotation_position="top right", annotation_font_size=14)
     return fig
 
 def simuler_evolution_fiscalite(annee, parents, enfants, revenu_foncier_net=0, est_parent_isole=False, revenu_max_simu=150000, step=1000):

@@ -133,14 +133,28 @@ def display_income_evolution_chart(results, revenu_brut_global_actuel, revenu_ma
         bordercolor="red",
         borderwidth=1,
         borderpad=4,
-        font=dict(size=10, color="black")
+        font=dict(size=14, color="black")  # Augmentation de 12 à 14
     )
     
     fig.update_layout(
         xaxis_ticksuffix='€', 
         yaxis_ticksuffix='€', 
         xaxis_range=[0, revenu_max_simu],
-        title="Évolution de l'impôt selon le revenu"
+        title="Évolution de l'impôt selon le revenu",
+        # Augmentation de la taille des polices
+        font=dict(size=14),  # Taille de police générale
+        title_font=dict(size=18),  # Titre principal
+        xaxis=dict(
+            tickfont=dict(size=14),  # Étiquettes de l'axe X
+            title=dict(font=dict(size=16))  # Titre de l'axe X
+        ),
+        yaxis=dict(
+            tickfont=dict(size=14),  # Étiquettes de l'axe Y
+            title=dict(font=dict(size=16))  # Titre de l'axe Y
+        ),
+        legend=dict(
+            font=dict(size=14)  # Police de la légende
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
