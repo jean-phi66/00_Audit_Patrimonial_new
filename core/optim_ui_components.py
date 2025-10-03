@@ -20,11 +20,16 @@ def afficher_sidebar_parametres():
     """
     # Initialisation des valeurs par défaut dans session_state si nécessaire
     if 'optim_sidebar_params' not in st.session_state:
+        # Valeur par défaut du plafond PER (sécurisée)
+        plafond_per_defaut = 27840.0
+        if 'optim_params' in st.session_state:
+            plafond_per_defaut = st.session_state.optim_params.get('plafond_per_annuel', 27840.0)
+        
         st.session_state.optim_sidebar_params = {
             'effort_max': 1000.0,
             'mensualite_max': 600.0,
             'capital_initial_max': 50000.0,
-            'plafond_per_annuel': st.session_state.optim_params.get('plafond_per_annuel', 27840.0)
+            'plafond_per_annuel': plafond_per_defaut
         }
     
     with st.sidebar:
