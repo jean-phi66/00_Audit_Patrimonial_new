@@ -173,8 +173,6 @@ def display_summary():
 def display_income_comparison_ui(total_revenus_mensuels, depenses, capacite_epargne_mensuelle):
     """Affiche la comparaison du niveau de vie du foyer avec les données nationales."""
     st.markdown("---")
-    st.header("👪 Positionnement du Foyer")
-    st.markdown("Cette section compare le **niveau de vie** de votre foyer à la moyenne nationale française, sur la base des données de l'INSEE (2021).")
 
     # 1. Calcul des unités de consommation
     parents = st.session_state.get('parents', [])
@@ -184,85 +182,186 @@ def display_income_comparison_ui(total_revenus_mensuels, depenses, capacite_epar
     # 2. Calcul du revenu disponible annuel
     impots_et_taxes_mensuels = sum(d.get('montant', 0.0) for d in depenses if d.get('categorie') == 'Impôts et taxes')
     revenu_disponible_annuel = (total_revenus_mensuels - impots_et_taxes_mensuels) * 12
+    revenu_disponible_mensuel = max(0, total_revenus_mensuels - impots_et_taxes_mensuels)
 
     if uc <= 0:
         st.warning("Le nombre d'unités de consommation est de 0. Impossible de calculer le niveau de vie.")
         return
 
     niveau_de_vie_foyer = revenu_disponible_annuel / uc
-
-    # 3. Affichage des métriques
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Unités de Consommation (UC)", f"{uc:.2f} UC", help="Le premier adulte compte pour 1 UC, chaque personne de +14 ans pour 0.5 UC, et chaque enfant de -14 ans pour 0.3 UC.")
-    col2.metric("Revenu Disponible Annuel", f"{revenu_disponible_annuel:,.0f} €", help="Total des revenus annuels moins les impôts et taxes directs.")
-    col3.metric("Niveau de Vie par UC", f"{niveau_de_vie_foyer:,.0f} € / an", help="Revenu disponible annuel divisé par le nombre d'UC. C'est cet indicateur qui est comparé aux données nationales.")
-
-    # 4. Création du graphique de comparaison
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        y=['Votre Foyer'], x=[niveau_de_vie_foyer], name='Votre Niveau de Vie', orientation='h',
-        marker=dict(color='rgba(23, 103, 166, 0.8)', line=dict(color='rgba(23, 103, 166, 1.0)', width=1)),
-        text=f"<b>{niveau_de_vie_foyer:,.0f} €</b>", textposition='inside', insidetextanchor='middle'
-    ))
-
-    for label, value in INSEE_DECILES_2021.items():
-        fig.add_vline(
-            x=value, line_width=1, line_dash="dash", line_color="grey",
-            annotation_text=f"<b>{label.split(' ')[0]}</b><br>{value:,.0f}€",
-            annotation_position="top", annotation_font_size=10
-        )
-
-    decile_atteint = next((label for label, value in sorted(INSEE_DECILES_2021.items(), key=lambda item: item[1], reverse=True) if niveau_de_vie_foyer >= value), None)
-    if decile_atteint:
-        st.success(f"Votre niveau de vie vous place au-dessus du **{decile_atteint}** des foyers français.")
-    else:
-        st.info("Votre niveau de vie se situe dans le premier décile des foyers français.")
-
-    fig.update_layout(
-        title_text="Positionnement de votre niveau de vie par rapport aux déciles français (INSEE 2021)",
-        xaxis_title="Niveau de vie annuel par Unité de Consommation (€)", yaxis_title="",
-        showlegend=False, height=300, margin=dict(l=20, r=20, t=80, b=20), bargap=0.5,
-        xaxis_range=[0, max(niveau_de_vie_foyer * 1.2, 50000)]
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- Section Taux d'épargne ---
-    st.markdown("---")
-    st.subheader("Comparaison du Taux d'Épargne")
-
-    # 1. Calculer le taux d'épargne du foyer
-    revenu_disponible_mensuel = max(0, total_revenus_mensuels - impots_et_taxes_mensuels)
-
-    # 2. Trouver le décile et le taux d'épargne cible
     decile_foyer = find_decile(niveau_de_vie_foyer, INSEE_DECILES_2021)
     taux_epargne_cible_pct = INSEE_SAVINGS_RATE_2017.get(decile_foyer, 0)
     epargne_cible_mensuelle = revenu_disponible_mensuel * (taux_epargne_cible_pct / 100)
 
-    # 3. Afficher la jauge
-    col_savings1, col_savings2 = st.columns([1, 2])
-    with col_savings1:
-        st.metric(
+    # 3. Affichage en deux colonnes principales (2/3 - 1/3)
+    main_col1, main_col2 = st.columns([2, 1])
+
+    with main_col1:
+        st.subheader("📊 Positionnement du Foyer")
+        
+        # Métriques du positionnement (3 colonnes sur la même ligne)
+        pos_col1, pos_col2, pos_col3 = st.columns(3)
+        pos_col1.metric("Unités de Consommation", f"{uc:.2f} UC", help="Le premier adulte compte pour 1 UC, chaque personne de +14 ans pour 0.5 UC, et chaque enfant de -14 ans pour 0.3 UC.")
+        pos_col2.metric("Revenu Disponible Annuel", f"{revenu_disponible_annuel:,.0f} €", help="Total des revenus annuels moins les impôts et taxes directs.")
+        pos_col3.metric("Niveau de Vie par UC", f"{niveau_de_vie_foyer:,.0f} € / an", help="Revenu disponible annuel divisé par le nombre d'UC.")
+
+        # Graphique de comparaison
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=['Votre Foyer'], x=[niveau_de_vie_foyer], name='Votre Niveau de Vie', orientation='h',
+            marker=dict(color='rgba(23, 103, 166, 0.8)', line=dict(color='rgba(23, 103, 166, 1.0)', width=1)),
+            text=f"<b>{niveau_de_vie_foyer:,.0f} €</b>", textposition='inside', insidetextanchor='middle'
+        ))
+
+        for label, value in INSEE_DECILES_2021.items():
+            fig.add_vline(
+                x=value, line_width=1, line_dash="dash", line_color="grey",
+                annotation_text=f"<b>{label.split(' ')[0]}</b><br>{value:,.0f}€",
+                annotation_position="top", annotation_font_size=10
+            )
+
+        decile_atteint = next((label for label, value in sorted(INSEE_DECILES_2021.items(), key=lambda item: item[1], reverse=True) if niveau_de_vie_foyer >= value), None)
+        if decile_atteint:
+            st.success(f"Votre niveau de vie vous place au-dessus du **{decile_atteint}** des foyers français.")
+        else:
+            st.info("Votre niveau de vie se situe dans le premier décile des foyers français.")
+
+        fig.update_layout(
+            title_text="Positionnement vs déciles français",
+            xaxis_title="Niveau de vie annuel par UC (€)", yaxis_title="",
+            showlegend=False, height=280, margin=dict(l=20, r=20, t=60, b=20), bargap=0.5,
+            xaxis_range=[0, max(niveau_de_vie_foyer * 1.2, 50000)]
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with main_col2:
+        st.subheader("💰 Comparaison du Taux d'Épargne")
+        
+        # Métriques d'épargne
+        sav_col1, sav_col2 = st.columns(2)
+        sav_col1.metric(
             label="Votre Épargne Mensuelle",
             value=f"{capacite_epargne_mensuelle:,.0f} €",
             delta=f"{capacite_epargne_mensuelle - epargne_cible_mensuelle:,.0f} € vs. moyenne"
         )
-        st.metric(
+        sav_col2.metric(
             label=f"Épargne Moyenne ({decile_foyer}e décile)",
             value=f"{epargne_cible_mensuelle:,.0f} €",
             help=f"Montant d'épargne mensuel moyen pour un foyer du {decile_foyer}e décile, correspondant à un taux de {taux_epargne_cible_pct}% du revenu disponible (Source: INSEE 2017)."
         )
 
-    with col_savings2:
-        # Définir une plage dynamique pour la jauge
+        # Jauge d'épargne
         min_range = min(-100, capacite_epargne_mensuelle * 1.2, epargne_cible_mensuelle * 1.2)
         max_range = max(100, capacite_epargne_mensuelle * 1.2, epargne_cible_mensuelle * 1.2)
 
         fig_gauge = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
             value = capacite_epargne_mensuelle,
-            number = {'prefix': "€ ", 'font': {'size': 40}},
-            title = {"text": f"Épargne mensuelle (Cible: {epargne_cible_mensuelle:,.0f} €)", 'font': {'size': 18}},
+            number = {'prefix': "€ ", 'font': {'size': 30}},
+            title = {"text": f"Épargne mensuelle (Cible: {epargne_cible_mensuelle:,.0f} €)", 'font': {'size': 16}},
             delta = {'reference': epargne_cible_mensuelle, 'increasing': {'color': "green"}, 'decreasing': {'color': "red"}},
             gauge = {'axis': {'range': [min_range, max_range]}, 'bar': {'color': "darkblue"}, 'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': epargne_cible_mensuelle}}))
-        fig_gauge.update_layout(height=250, margin=dict(t=50, b=20, l=30, r=30))
+        fig_gauge.update_layout(height=350, margin=dict(t=50, b=20, l=30, r=30))
         st.plotly_chart(fig_gauge, use_container_width=True)
+
+
+def display_detailed_tables():
+    """Affiche les tableaux détaillés des flux mensuels et annuels."""
+    st.markdown("---")
+    st.subheader("📊 Tableaux détaillés des Flux")
+
+    # Création des données pour les tables
+    revenus_data = []
+    depenses_data = []
+
+    # Récupération des données de revenus depuis session_state
+    if 'revenus' in st.session_state and isinstance(st.session_state.revenus, list):
+        for revenu in st.session_state.revenus:
+            montant = revenu.get('montant', 0)
+            if montant > 0:
+                # Déterminer le type et la personne
+                type_revenu = revenu.get('type', 'Autre')
+                libelle = revenu.get('libelle', 'N/A')
+                
+                if type_revenu == 'Salaire':
+                    # Extraire le prénom du libellé "Salaire Prénom"
+                    personne = libelle.replace('Salaire ', '') if 'Salaire ' in libelle else 'N/A'
+                    revenus_data.append({'Type': 'Salaire', 'Personne': personne, 'Montant': montant})
+                elif type_revenu == 'Patrimoine':
+                    revenus_data.append({'Type': 'Patrimoine', 'Personne': 'Foyer', 'Montant': montant, 'Détail': libelle})
+                else:
+                    revenus_data.append({'Type': type_revenu, 'Personne': 'Foyer', 'Montant': montant, 'Détail': libelle})
+
+    # Récupération des données de dépenses depuis session_state
+    if 'depenses' in st.session_state and isinstance(st.session_state.depenses, list):
+        for depense in st.session_state.depenses:
+            montant = depense.get('montant', 0)
+            if montant > 0:
+                categorie = depense.get('categorie', 'Autres')
+                libelle = depense.get('libelle', 'N/A')
+                
+                depenses_data.append({'Catégorie': categorie, 'Montant': montant, 'Détail': libelle})
+
+    # --- Table détaillée des flux MENSUELS ---
+    with st.expander("📅 Flux Mensuels", expanded=True):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### 💰 Revenus")
+            if revenus_data:
+                df_revenus = pd.DataFrame(revenus_data)
+                # Calcul du total avant formatage
+                total_revenus = df_revenus['Montant'].sum()
+                # Formatage pour affichage
+                df_revenus['Montant'] = df_revenus['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+                st.dataframe(df_revenus, use_container_width=True, hide_index=True)
+                st.markdown(f"**Total revenus : {total_revenus:,.0f} €**".replace(',', ' '))
+            else:
+                st.info("Aucun revenu renseigné")
+
+        with col2:
+            st.markdown("### 💸 Charges")
+            if depenses_data:
+                df_charges = pd.DataFrame(depenses_data)
+                # Calcul du total avant formatage
+                total_charges = df_charges['Montant'].sum()
+                # Formatage pour affichage
+                df_charges['Montant'] = df_charges['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+                st.dataframe(df_charges, use_container_width=True, hide_index=True)
+                st.markdown(f"**Total charges : {total_charges:,.0f} €**".replace(',', ' '))
+            else:
+                st.info("Aucune charge renseignée")
+
+    # --- Table détaillée des flux ANNUELS ---
+    with st.expander("📅 Flux Annuels", expanded=False):
+        col1_exp, col2_exp = st.columns(2)
+
+        with col1_exp:
+            st.markdown("### 💰 Revenus Annuels")
+            if revenus_data:
+                df_revenus_annual = pd.DataFrame(revenus_data)
+                # Multiplier par 12 pour obtenir les valeurs annuelles
+                df_revenus_annual['Montant'] = df_revenus_annual['Montant'] * 12
+                # Calcul du total avant formatage
+                total_revenus_annual = df_revenus_annual['Montant'].sum()
+                # Formatage pour affichage
+                df_revenus_annual['Montant'] = df_revenus_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+                st.dataframe(df_revenus_annual, use_container_width=True, hide_index=True)
+                st.markdown(f"**Total revenus annuels : {total_revenus_annual:,.0f} €**".replace(',', ' '))
+            else:
+                st.info("Aucun revenu renseigné")
+
+        with col2_exp:
+            st.markdown("### 💸 Charges Annuelles")
+            if depenses_data:
+                df_charges_annual = pd.DataFrame(depenses_data)
+                # Multiplier par 12 pour obtenir les valeurs annuelles
+                df_charges_annual['Montant'] = df_charges_annual['Montant'] * 12
+                # Calcul du total avant formatage
+                total_charges_annual = df_charges_annual['Montant'].sum()
+                # Formatage pour affichage
+                df_charges_annual['Montant'] = df_charges_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
+                st.dataframe(df_charges_annual, use_container_width=True, hide_index=True)
+                st.markdown(f"**Total charges annuelles : {total_charges_annual:,.0f} €**".replace(',', ' '))
+            else:
+                st.info("Aucune charge renseignée")

@@ -29,7 +29,6 @@ def afficher_sidebar_parametres():
         effort_max = st.number_input(
             "Épargne max",
             min_value=0.0,
-            max_value=10000.0,
             value=1000.0,
             step=50.0,
             help="€/mois"
@@ -39,7 +38,6 @@ def afficher_sidebar_parametres():
         mensualite_max = st.number_input(
             "Crédit SCPI max",
             min_value=0.0,
-            max_value=5000.0,
             value=600.0,
             step=50.0,
             help="€/mois"
@@ -48,7 +46,6 @@ def afficher_sidebar_parametres():
         capital_initial_max = st.number_input(
             "Capital initial max (€)",
             min_value=0.0,
-            max_value=1000000.0,
             value=50000.0,
             step=1000.0
         )
@@ -56,7 +53,6 @@ def afficher_sidebar_parametres():
         plafond_per_annuel = st.number_input(
             "Plafond PER annuel (€)",
             min_value=0.0,
-            max_value=50000.0,
             value=st.session_state.optim_params['plafond_per_annuel'],
             step=100.0
         )
@@ -185,7 +181,6 @@ def afficher_variables_optimisation():
                         capital_value = st.number_input(
                             f"€",
                             min_value=0.0,
-                            max_value=100000.0,
                             value=st.session_state.optim_current_values[actif['capital_key']],
                             step=1000.0,
                             key=f"{actif['capital_key']}_fixe",
@@ -218,7 +213,6 @@ def afficher_variables_optimisation():
                         versement_value = st.number_input(
                             f"€",
                             min_value=0.0,
-                            max_value=2000.0,
                             value=st.session_state.optim_current_values[actif['versement_key']],
                             step=50.0,
                             key=f"{actif['versement_key']}_fixe",
@@ -258,7 +252,6 @@ def afficher_variables_optimisation():
                         credit_scpi_montant = st.number_input(
                             "€",
                             min_value=0.0,
-                            max_value=500000.0,
                             value=st.session_state.optim_current_values['credit_scpi_montant'],
                             step=5000.0,
                             key="credit_scpi_montant_fixe",

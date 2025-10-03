@@ -5,7 +5,8 @@ from core.flux_logic import sync_all_flux_data
 from core.flux_display import (
     display_revenus_ui,
     display_depenses_ui,
-    display_summary
+    display_summary,
+    display_detailed_tables
 )
 
 # --- Exécution Principale ---
@@ -42,137 +43,6 @@ with col2:
 
 display_summary()
 
-# --- Table détaillée des flux ---
-st.markdown("---")
-st.subheader("📊 Tableaux détaillés des Flux")
-
-# Création des données pour la table
-revenus_data = []
-depenses_data = []
-
-# Récupération des données de revenus depuis session_state (liste d'objets)
-if 'revenus' in st.session_state and isinstance(st.session_state.revenus, list):
-    for revenu in st.session_state.revenus:
-        montant = revenu.get('montant', 0)
-        if montant > 0:
-            # Déterminer le type et la personne
-            type_revenu = revenu.get('type', 'Autre')
-            libelle = revenu.get('libelle', 'N/A')
-            
-            if type_revenu == 'Salaire':
-                # Extraire le prénom du libellé "Salaire Prénom"
-                personne = libelle.replace('Salaire ', '') if 'Salaire ' in libelle else 'N/A'
-                revenus_data.append({'Type': 'Salaire', 'Personne': personne, 'Montant': montant})
-            elif type_revenu == 'Patrimoine':
-                revenus_data.append({'Type': 'Patrimoine', 'Personne': 'Foyer', 'Montant': montant, 'Détail': libelle})
-            else:
-                revenus_data.append({'Type': type_revenu, 'Personne': 'Foyer', 'Montant': montant, 'Détail': libelle})
-
-# Récupération des données de dépenses depuis session_state (liste d'objets)
-if 'depenses' in st.session_state and isinstance(st.session_state.depenses, list):
-    for depense in st.session_state.depenses:
-        montant = depense.get('montant', 0)
-        if montant > 0:
-            categorie = depense.get('categorie', 'Autres')
-            libelle = depense.get('libelle', 'N/A')
-            
-            depenses_data.append({'Catégorie': categorie, 'Montant': montant, 'Détail': libelle})
-
-
-
-
-# --- Table détaillée des flux MENSUELS ---
-with st.expander("📅 Flux Mensuels", expanded=True):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("### 💰 Revenus")
-        if revenus_data:
-            df_revenus = pd.DataFrame(revenus_data)
-            # Calcul du total avant formatage
-            total_revenus = df_revenus['Montant'].sum()
-            # Formatage pour affichage
-            df_revenus['Montant'] = df_revenus['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
-            st.dataframe(df_revenus, use_container_width=True, hide_index=True)
-            st.markdown(f"**Total revenus : {total_revenus:,.0f} €**".replace(',', ' '))
-        else:
-            st.info("Aucun revenu renseigné")
-
-    with col2:
-        st.markdown("### 💸 Charges")
-        if depenses_data:
-            df_charges = pd.DataFrame(depenses_data)
-            # Calcul du total avant formatage
-            total_charges = df_charges['Montant'].sum()
-            # Formatage pour affichage
-            df_charges['Montant'] = df_charges['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
-            st.dataframe(df_charges, use_container_width=True, hide_index=True)
-            st.markdown(f"**Total charges : {total_charges:,.0f} €**".replace(',', ' '))
-        else:
-            st.info("Aucune charge renseignée")
-
-# Calcul et affichage de la capacité d'épargne
-if(False):  # Désactivation temporaire du calcul si une des listes est vide
-    if revenus_data and depenses_data:
-        # Recalcul des totaux avec les valeurs numériques originales
-        total_revenus_num = sum([item['Montant'] for item in revenus_data])
-        total_charges_num = sum([item['Montant'] for item in depenses_data])
-        capacite_epargne = total_revenus_num - total_charges_num
-        
-        st.markdown("---")
-        if capacite_epargne > 0:
-            st.success(f"💰 **Capacité d'épargne mensuelle : {capacite_epargne:,.0f} €**".replace(',', ' '))
-        elif capacite_epargne < 0:
-            st.error(f"⚠️ **Déficit mensuel : {abs(capacite_epargne):,.0f} €**".replace(',', ' '))
-        else:
-            st.info("**Équilibre parfait : 0 €**")
-
-# --- Table détaillée des flux ANNUELS ---
-#st.markdown("---")
-with st.expander("📅 Flux Annuels", expanded=False):
-    col1_exp, col2_exp = st.columns(2)
-
-    with col1_exp:
-        st.markdown("### 💰 Revenus Annuels")
-        if revenus_data:
-            df_revenus_annual = pd.DataFrame(revenus_data)
-            # Multiplier par 12 pour obtenir les valeurs annuelles
-            df_revenus_annual['Montant'] = df_revenus_annual['Montant'] * 12
-            # Calcul du total avant formatage
-            total_revenus_annual = df_revenus_annual['Montant'].sum()
-            # Formatage pour affichage
-            df_revenus_annual['Montant'] = df_revenus_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
-            st.dataframe(df_revenus_annual, use_container_width=True, hide_index=True)
-            st.markdown(f"**Total revenus annuels : {total_revenus_annual:,.0f} €**".replace(',', ' '))
-        else:
-            st.info("Aucun revenu renseigné")
-
-    with col2_exp:
-        st.markdown("### 💸 Charges Annuelles")
-        if depenses_data:
-            df_charges_annual = pd.DataFrame(depenses_data)
-            # Multiplier par 12 pour obtenir les valeurs annuelles
-            df_charges_annual['Montant'] = df_charges_annual['Montant'] * 12
-            # Calcul du total avant formatage
-            total_charges_annual = df_charges_annual['Montant'].sum()
-            # Formatage pour affichage
-            df_charges_annual['Montant'] = df_charges_annual['Montant'].apply(lambda x: f"{x:,.0f} €".replace(',', ' '))
-            st.dataframe(df_charges_annual, use_container_width=True, hide_index=True)
-            st.markdown(f"**Total charges annuelles : {total_charges_annual:,.0f} €**".replace(',', ' '))
-        else:
-            st.info("Aucune charge renseignée")
-
-# Calcul et affichage de la capacité d'épargne annuelle
-if(False):  # Désactivation temporaire du calcul si une des listes est vide
-    if revenus_data and depenses_data:
-        # Capacité d'épargne annuelle
-        capacite_epargne_annual = capacite_epargne * 12
-        
-        st.markdown("---")
-        if capacite_epargne_annual > 0:
-            st.success(f"💰 **Capacité d'épargne annuelle : {capacite_epargne_annual:,.0f} €**".replace(',', ' '))
-        elif capacite_epargne_annual < 0:
-            st.error(f"⚠️ **Déficit annuel : {abs(capacite_epargne_annual):,.0f} €**".replace(',', ' '))
-        else:
-            st.info("**Équilibre parfait : 0 €**")
+# Affichage des tableaux détaillés
+display_detailed_tables()
 
